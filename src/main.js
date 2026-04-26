@@ -16,6 +16,7 @@ const thresholdInput = document.getElementById('threshold');
 const thresholdVal = document.getElementById('threshold-val');
 const permOverlay = document.getElementById('permission-overlay');
 const startBtn = document.getElementById('start-btn');
+const toggleBtn = document.getElementById('toggle-btn');
 const errMsg = document.getElementById('err-msg');
 const ctx = overlay.getContext('2d');
 
@@ -25,6 +26,8 @@ let audioCtx = null;
 let inferring = false;
 let lastPredictions = [];
 let animFrameId = null;
+let scanning = true;
+let inferenceInterval = null;
 
 // ─── Offscreen capture canvas ─────────────────────────────────────────────────
 const capture = document.createElement('canvas');
@@ -133,9 +136,29 @@ function renderLoop() {
   animFrameId = requestAnimationFrame(renderLoop);
 }
 
+// ─── Scan toggle ──────────────────────────────────────────────────────────────
+function toggleScanning() {
+  scanning = !scanning;
+  if (scanning) {
+    toggleBtn.textContent = 'Pause';
+    toggleBtn.classList.remove('paused');
+    statusEl.textContent = 'Scanning…';
+    statusEl.className = '';
+  } else {
+    toggleBtn.textContent = 'Resume';
+    toggleBtn.classList.add('paused');
+    statusEl.textContent = 'Paused';
+    statusEl.className = '';
+    lastPredictions = [];
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+  }
+}
+
+toggleBtn.addEventListener('click', toggleScanning);
+
 // ─── Roboflow inference ───────────────────────────────────────────────────────
 async function runInference() {
-  if (inferring || video.readyState < 2) return;
+  if (!scanning || inferring || video.readyState < 2) return;
   inferring = true;
 
   try {
@@ -194,8 +217,9 @@ async function startCamera() {
 
     permOverlay.classList.remove('visible');
     statusEl.textContent = 'Scanning…';
+    toggleBtn.disabled = false;
     renderLoop();
-    setInterval(runInference, INTERVAL_MS);
+    inferenceInterval = setInterval(runInference, INTERVAL_MS);
   } catch (err) {
     startBtn.disabled = false;
     errMsg.style.display = 'block';

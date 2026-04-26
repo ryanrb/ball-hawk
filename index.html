@@ -135,6 +135,26 @@
         text-align: right;
       }
 
+      /* ── Scan toggle button ──────────────────────────────────────────── */
+      #toggle-btn {
+        flex-shrink: 0;
+        padding: 8px 16px;
+        border: 2px solid #00ff88;
+        border-radius: 20px;
+        background: transparent;
+        color: #00ff88;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+        transition: background 0.15s, color 0.15s;
+      }
+
+      #toggle-btn.paused {
+        background: #00ff88;
+        color: #0d0d1a;
+      }
+
       /* ── Permission / error overlay ─────────────────────────────────── */
       #permission-overlay {
         display: none;
@@ -193,6 +213,7 @@
       <label for="threshold">Min confidence</label>
       <input id="threshold" type="range" min="0" max="1" step="0.01" value="0.70" />
       <span id="threshold-val">70%</span>
+      <button id="toggle-btn" disabled>Pause</button>
     </div>
 
     <script type="module" src="./src/main.js"></script>
