@@ -31,12 +31,13 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build
         run: npm run build
         env:
           VITE_ROBOFLOW_KEY: ${{ secrets.VITE_ROBOFLOW_KEY }}
+          VITE_MAPBOX_KEY: ${{ secrets.VITE_MAPBOX_KEY }}
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
