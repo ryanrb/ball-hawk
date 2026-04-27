@@ -4,7 +4,6 @@ const ENDPOINT = 'https://serverless.roboflow.com/golfball/1';
 const CAPTURE_W = 640;
 const CAPTURE_H = 480;
 const INTERVAL_MS = 250;
-const BOX_COLOR = '#00ff88';
 const BOX_FONT = 'bold 14px -apple-system, sans-serif';
 
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
@@ -69,9 +68,17 @@ function beep() {
   }
 }
 
+// ─── Confidence color (blue=low → red=high across threshold–100%) ─────────────
+function confidenceColor(confidence) {
+  const t = Math.min(1, Math.max(0, (confidence - threshold) / (1 - threshold)));
+  const hue = Math.round(240 * (1 - t));
+  return `hsl(${hue}, 100%, 55%)`;
+}
+
 // ─── Pulse animation ──────────────────────────────────────────────────────────
 let pulseTimeout = null;
-function triggerPulse() {
+function triggerPulse(color) {
+  pulseEl.style.borderColor = color;
   pulseEl.classList.remove('active');
   // force reflow so the animation restarts
   void pulseEl.offsetWidth;
@@ -88,7 +95,7 @@ function resizeOverlay() {
 new ResizeObserver(resizeOverlay).observe(overlay);
 resizeOverlay();
 
-// ─── Draw bounding boxes ──────────────────────────────────────────────────────
+// ─── Draw detection circles ───────────────────────────────────────────────────
 function drawPredictions(predictions) {
   ctx.clearRect(0, 0, overlay.width, overlay.height);
   if (!predictions.length) return;
@@ -101,31 +108,31 @@ function drawPredictions(predictions) {
   for (const p of predictions) {
     if (p.confidence < threshold) continue;
 
-    const x = (p.x - p.width / 2) * scaleX;
-    const y = (p.y - p.height / 2) * scaleY;
-    const w = p.width * scaleX;
-    const h = p.height * scaleY;
+    const color = confidenceColor(p.confidence);
+    const cx = p.x * scaleX;
+    const cy = p.y * scaleY;
+    const radius = (p.width * scaleX + p.height * scaleY) / 4;
 
-    // Box
-    ctx.strokeStyle = BOX_COLOR;
+    // Circle
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = color;
     ctx.lineWidth = 2.5;
-    ctx.shadowColor = BOX_COLOR;
+    ctx.shadowColor = color;
     ctx.shadowBlur = 8;
-    ctx.strokeRect(x, y, w, h);
+    ctx.stroke();
     ctx.shadowBlur = 0;
 
-    // Label background
-    const label = `Golf Ball  ${Math.round(p.confidence * 100)}%`;
+    // Confidence label centered below the circle
+    const label = `${Math.round(p.confidence * 100)}%`;
     ctx.font = BOX_FONT;
     const textW = ctx.measureText(label).width;
     const labelH = 20;
-    const lx = x;
-    const ly = y > labelH ? y - labelH : y + h;
+    const lx = cx - textW / 2 - 5;
+    const ly = cy + radius + 6;
     ctx.fillStyle = 'rgba(0,0,0,0.65)';
     ctx.fillRect(lx, ly, textW + 10, labelH);
-
-    // Label text
-    ctx.fillStyle = BOX_COLOR;
+    ctx.fillStyle = color;
     ctx.fillText(label, lx + 5, ly + 14);
   }
 }
@@ -180,7 +187,8 @@ async function runInference() {
     if (preds.length > 0) {
       statusEl.textContent = `Detected ${preds.length} ball${preds.length > 1 ? 's' : ''}`;
       statusEl.className = 'detecting';
-      triggerPulse();
+      const topColor = confidenceColor(Math.max(...preds.map(p => p.confidence)));
+      triggerPulse(topColor);
       beep();
     } else {
       statusEl.textContent = 'Scanning…';
