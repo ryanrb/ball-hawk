@@ -3,6 +3,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   base: '/ball-hawk/',
+
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
@@ -10,8 +11,8 @@ export default defineConfig({
       manifest: {
         name: 'Ball Hawk',
         short_name: 'BallHawk',
-        description: 'Live golf ball detector powered by Roboflow AI',
-        theme_color: '#1a1a2e',
+        description: 'Golf ball finder with GPS tracking and AI detection',
+        theme_color: '#0d0d1a',
         background_color: '#0d0d1a',
         display: 'fullscreen',
         orientation: 'portrait',
@@ -23,4 +24,13 @@ export default defineConfig({
       },
     }),
   ],
+
+  optimizeDeps: {
+    include: ['mapbox-gl'],
+  },
+
+  server: {
+    host: true,
+    port: 5173,
+  },
 });
