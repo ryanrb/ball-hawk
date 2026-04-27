@@ -1,0 +1,334 @@
+import mapboxgl from 'mapbox-gl';
+import { gps } from '../services/gps.js';
+import { session } from '../services/session.js';
+import { bing, initAudio } from '../utils/audio.js';
+import { haversineDistance, circlePolygon, SEARCH_RADIUS_M } from '../utils/geo.js';
+
+mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_KEY ?? '';
+
+export class MapScreen {
+  constructor(el) {
+    this.el = el;
+    this.map = null;
+    this.userMarker = null;
+    this.userCoords = null;
+    this.shotMarkers = new Map();      // shotId → { fromM, landM, fromEl, landEl }
+    this.detectionMarkers = new Map(); // detId  → mapboxgl.Marker
+    this.inRange = new Set();          // shotIds currently in proximity
+    this.markingMode = false;
+    this._pendingFrom = null;
+    this._pendingFromMarker = null;
+    this._alertedIds = new Set();      // shots we've already bung'd for
+    this.onCameraRequest = null;
+    this.onSessionRequest = null;
+  }
+
+  async init() {
+    this._render();
+    await this._initMap();
+    this._bindEvents();
+    this._startGPS();
+    session.onChange(() => this._syncSession());
+  }
+
+  // ── DOM ────────────────────────────────────────────────────────────────
+  _render() {
+    this.el.innerHTML = `
+      <div id="bh-map"></div>
+
+      <div class="map-header">
+        <div class="app-title">&#x26F3; Ball Hawk</div>
+        <div class="gps-status">
+          <div class="gps-dot" id="gps-dot"></div>
+          <span id="gps-text">Locating&hellip;</span>
+        </div>
+      </div>
+
+      <div class="proximity-banner hidden" id="prox-banner">
+        &#x1F3AF; You&rsquo;re in range &mdash; start scanning
+      </div>
+
+      <div class="marking-banner hidden" id="mark-banner">
+        <span>&#x1F4CD; Tap the map where the ball landed</span>
+        <button class="cancel-btn" id="cancel-mark">Cancel</button>
+      </div>
+
+      <div class="map-actions">
+        <button class="session-btn" id="session-btn">
+          <span class="shot-badge" id="shot-count">0</span> History
+        </button>
+        <button class="mark-shot-btn" id="mark-shot-btn">&#x1F4CD; Mark Shot</button>
+        <button class="camera-btn hidden" id="camera-btn">&#x1F4F7; Scan</button>
+      </div>
+
+      <div class="range-tip hidden" id="range-tip">
+        Best results within 15 yards &mdash; move closer if no detection
+      </div>
+    `;
+  }
+
+  // ── Mapbox init ────────────────────────────────────────────────────────
+  _initMap() {
+    return new Promise(resolve => {
+      this.map = new mapboxgl.Map({
+        container: 'bh-map',
+        style: 'mapbox://styles/mapbox/outdoors-v12',
+        zoom: 16,
+        center: [-98.583, 39.833], // US center fallback
+        attributionControl: false,
+      });
+      this.map.addControl(
+        new mapboxgl.AttributionControl({ compact: true }),
+        'bottom-left'
+      );
+      this.map.on('load', () => {
+        this._addCircleLayers();
+        resolve();
+      });
+    });
+  }
+
+  _addCircleLayers() {
+    this.map.addSource('circles', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+    });
+    this.map.addLayer({
+      id: 'circles-fill',
+      type: 'fill',
+      source: 'circles',
+      paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.12 },
+    });
+    this.map.addLayer({
+      id: 'circles-line',
+      type: 'line',
+      source: 'circles',
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': 2,
+        'line-opacity': 0.85,
+        'line-dasharray': [4, 2],
+      },
+    });
+  }
+
+  // ── Event binding ──────────────────────────────────────────────────────
+  _bindEvents() {
+    this.el.addEventListener('click', e => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      if (btn.id === 'mark-shot-btn') this._startMarkShot();
+      if (btn.id === 'cancel-mark')   this._cancelMark();
+      if (btn.id === 'camera-btn')    this.onCameraRequest?.();
+      if (btn.id === 'session-btn')   this.onSessionRequest?.();
+    });
+    this.map.on('click', e => {
+      if (this.markingMode) this._confirmLanding(e.lngLat);
+    });
+  }
+
+  // ── GPS ────────────────────────────────────────────────────────────────
+  async _startGPS() {
+    try {
+      const coords = await gps.start();
+      this._onCoords(coords);
+      this.map.flyTo({ center: [coords.lng, coords.lat], zoom: 18 });
+    } catch {
+      const t = document.getElementById('gps-text');
+      if (t) t.textContent = 'GPS denied';
+    }
+    gps.onUpdate(c => this._onCoords(c));
+  }
+
+  _onCoords(c) {
+    this.userCoords = c;
+    const t = document.getElementById('gps-text');
+    const dot = document.getElementById('gps-dot');
+    if (t)   t.textContent = `±${Math.round(c.accuracy ?? 0)}m`;
+    if (dot) dot.className = 'gps-dot active';
+    this._updateUserDot(c);
+    this._checkProximity(c);
+  }
+
+  _updateUserDot(c) {
+    const pos = [c.lng, c.lat];
+    if (!this.userMarker) {
+      const el = document.createElement('div');
+      el.className = 'user-dot';
+      el.innerHTML = '<div class="user-dot-inner"></div><div class="user-dot-ring"></div>';
+      this.userMarker = new mapboxgl.Marker({ element: el, anchor: 'center' })
+        .setLngLat(pos).addTo(this.map);
+    } else {
+      this.userMarker.setLngLat(pos);
+    }
+  }
+
+  // ── Shot marking (Phase 1) ─────────────────────────────────────────────
+  _startMarkShot() {
+    if (!this.userCoords) { alert('Waiting for GPS…'); return; }
+    initAudio(); // ungate AudioContext on user gesture
+
+    this._pendingFrom = { lat: this.userCoords.lat, lng: this.userCoords.lng };
+
+    // Drop temporary tee marker
+    const el = this._makeShotEl(session._shotSeq, 'tee');
+    this._pendingFromMarker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
+      .setLngLat([this._pendingFrom.lng, this._pendingFrom.lat]).addTo(this.map);
+
+    this.markingMode = true;
+    document.getElementById('mark-banner').classList.remove('hidden');
+    document.getElementById('mark-shot-btn').classList.add('hidden');
+  }
+
+  _confirmLanding(lngLat) {
+    const landing = { lat: lngLat.lat, lng: lngLat.lng };
+    this._pendingFromMarker?.remove();
+    this._pendingFromMarker = null;
+    this.markingMode = false;
+
+    const shot = session.addShot(this._pendingFrom, landing);
+    this._pendingFrom = null;
+    this._drawShot(shot);
+
+    document.getElementById('mark-banner').classList.add('hidden');
+    document.getElementById('mark-shot-btn').classList.remove('hidden');
+  }
+
+  _cancelMark() {
+    this._pendingFromMarker?.remove();
+    this._pendingFromMarker = null;
+    this._pendingFrom = null;
+    this.markingMode = false;
+    document.getElementById('mark-banner').classList.add('hidden');
+    document.getElementById('mark-shot-btn').classList.remove('hidden');
+  }
+
+  _drawShot(shot) {
+    const fromEl = this._makeShotEl(shot.id, 'tee');
+    const landEl = this._makeShotEl(shot.id, 'landing');
+    const fromM = new mapboxgl.Marker({ element: fromEl, anchor: 'bottom' })
+      .setLngLat([shot.fromPin.lng, shot.fromPin.lat]).addTo(this.map);
+    const landM = new mapboxgl.Marker({ element: landEl, anchor: 'bottom' })
+      .setLngLat([shot.landingPin.lng, shot.landingPin.lat]).addTo(this.map);
+    this.shotMarkers.set(shot.id, { fromM, landM, fromEl, landEl });
+    this._refreshCircles();
+    const badge = document.getElementById('shot-count');
+    if (badge) badge.textContent = session.shots.length;
+  }
+
+  _makeShotEl(id, type) {
+    const el = document.createElement('div');
+    el.className = `shot-marker ${type === 'tee' ? 'tee-marker' : 'landing-marker'}`;
+    el.innerHTML = `<div class="shot-number">${id}</div>`;
+    return el;
+  }
+
+  // ── Proximity monitoring ───────────────────────────────────────────────
+  _checkProximity(c) {
+    let anyInRange = false;
+    for (const shot of session.shots) {
+      if (shot.status !== 'active') continue;
+      const dist = haversineDistance(c.lat, c.lng, shot.landingPin.lat, shot.landingPin.lng);
+      if (dist <= SEARCH_RADIUS_M) {
+        anyInRange = true;
+        if (!this.inRange.has(shot.id)) {
+          this.inRange.add(shot.id);
+          if (!this._alertedIds.has(shot.id)) {
+            this._alertedIds.add(shot.id);
+            bing();
+          }
+        }
+      } else {
+        this.inRange.delete(shot.id);
+      }
+    }
+
+    const banner = document.getElementById('prox-banner');
+    const camBtn = document.getElementById('camera-btn');
+    const tip    = document.getElementById('range-tip');
+    if (anyInRange) {
+      banner?.classList.remove('hidden');
+      camBtn?.classList.remove('hidden');
+      tip?.classList.remove('hidden');
+    } else {
+      banner?.classList.add('hidden');
+      tip?.classList.add('hidden');
+    }
+    this._refreshCircles();
+  }
+
+  _refreshCircles() {
+    const src = this.map?.getSource?.('circles');
+    if (!src) return;
+    const features = session.shots
+      .filter(s => s.status === 'active')
+      .map(shot => {
+        const f = circlePolygon(shot.landingPin.lng, shot.landingPin.lat, SEARCH_RADIUS_M);
+        f.properties.color = this.inRange.has(shot.id) ? '#00ff88' : '#3b82f6';
+        return f;
+      });
+    src.setData({ type: 'FeatureCollection', features });
+  }
+
+  // ── Detection pins (called from CameraScreen via main.js) ─────────────
+  addDetectionPin(lat, lng, confidence, shotId = null) {
+    const det = session.addDetection(lat, lng, confidence, shotId);
+    this._renderDetPin(det.id, lat, lng, confidence);
+    return det;
+  }
+
+  _renderDetPin(id, lat, lng, conf) {
+    let color, label;
+    if (conf >= 0.85)      { color = '#00ff88'; label = 'Ball Found'; }
+    else if (conf >= 0.70) { color = '#fbbf24'; label = 'Probable Ball'; }
+    else                   { color = '#f97316'; label = 'Possible Ball'; }
+
+    const el = document.createElement('div');
+    el.className = 'detection-pin';
+    el.innerHTML = `
+      <div class="pin-circle" style="background:${color};box-shadow:0 0 8px ${color}66"></div>
+      <div class="pin-label" style="color:${color}">${label}<br>${Math.round(conf * 100)}%</div>
+    `;
+    const m = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
+      .setLngLat([lng, lat]).addTo(this.map);
+    this.detectionMarkers.set(id, m);
+  }
+
+  // ── Session sync ───────────────────────────────────────────────────────
+  _syncSession() {
+    const badge = document.getElementById('shot-count');
+    if (badge) badge.textContent = session.shots.length;
+    this._refreshCircles();
+    // Reflect found/lost status on landing marker colours
+    for (const [id, { landEl }] of this.shotMarkers) {
+      const shot = session.shots.find(s => s.id === id);
+      if (!shot) continue;
+      if (shot.status === 'found') {
+        landEl.style.background = '#00ff88';
+        landEl.style.boxShadow  = '0 2px 10px rgba(0,255,136,0.6)';
+      } else if (shot.status === 'lost') {
+        landEl.style.background = '#4b5563';
+        landEl.style.boxShadow  = 'none';
+      }
+    }
+  }
+
+  // ── Public helpers used by CameraScreen ───────────────────────────────
+  getGpsContext() {
+    return this.userCoords;
+  }
+
+  getNearestActiveShot() {
+    if (!this.userCoords || !session.shots.length) return null;
+    let nearest = null, minDist = Infinity;
+    for (const shot of session.shots) {
+      if (shot.status !== 'active') continue;
+      const d = haversineDistance(
+        this.userCoords.lat, this.userCoords.lng,
+        shot.landingPin.lat, shot.landingPin.lng
+      );
+      if (d < minDist) { minDist = d; nearest = shot; }
+    }
+    return nearest;
+  }
+}
