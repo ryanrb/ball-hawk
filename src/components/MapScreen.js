@@ -19,6 +19,7 @@ export class MapScreen {
     this._pendingFrom = null;
     this._pendingFromMarker = null;
     this._alertedIds = new Set();      // shots we've already bung'd for
+    this._satellite = false;
     this.onCameraRequest = null;
     this.onSessionRequest = null;
   }
@@ -38,9 +39,12 @@ export class MapScreen {
 
       <div class="map-header">
         <div class="app-title">&#x26F3; Ball Hawk</div>
-        <div class="gps-status">
-          <div class="gps-dot" id="gps-dot"></div>
-          <span id="gps-text">Locating&hellip;</span>
+        <div class="map-header-right">
+          <div class="gps-status">
+            <div class="gps-dot" id="gps-dot"></div>
+            <span id="gps-text">Locating&hellip;</span>
+          </div>
+          <button class="layer-toggle" id="layer-toggle">&#x1F6F0; Satellite</button>
         </div>
       </div>
 
@@ -112,15 +116,30 @@ export class MapScreen {
     });
   }
 
+  _toggleLayer() {
+    this._satellite = !this._satellite;
+    const style = this._satellite
+      ? 'mapbox://styles/mapbox/satellite-streets-v12'
+      : 'mapbox://styles/mapbox/outdoors-v12';
+    const btn = document.getElementById('layer-toggle');
+    if (btn) btn.textContent = this._satellite ? '\u{1F5FA}️ Map' : '\u{1F6F0}️ Satellite';
+    this.map.once('style.load', () => {
+      this._addCircleLayers();
+      this._refreshCircles();
+    });
+    this.map.setStyle(style);
+  }
+
   // ── Event binding ──────────────────────────────────────────────────────
   _bindEvents() {
     this.el.addEventListener('click', e => {
       const btn = e.target.closest('button');
       if (!btn) return;
-      if (btn.id === 'mark-shot-btn') this._startMarkShot();
-      if (btn.id === 'cancel-mark')   this._cancelMark();
-      if (btn.id === 'camera-btn')    this.onCameraRequest?.();
-      if (btn.id === 'session-btn')   this.onSessionRequest?.();
+      if (btn.id === 'mark-shot-btn')  this._startMarkShot();
+      if (btn.id === 'cancel-mark')    this._cancelMark();
+      if (btn.id === 'camera-btn')     this.onCameraRequest?.();
+      if (btn.id === 'session-btn')    this.onSessionRequest?.();
+      if (btn.id === 'layer-toggle')   this._toggleLayer();
     });
     this.map.on('click', e => {
       if (this.markingMode) this._confirmLanding(e.lngLat);
