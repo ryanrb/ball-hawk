@@ -38,6 +38,11 @@ class SessionService {
     if (shot) { shot.status = status; this._emit(); }
   }
 
+  updateShotLanding(shotId, landingPin) {
+    const shot = this.shots.find(s => s.id === shotId);
+    if (shot) { shot.landingPin = landingPin; this._emit(); }
+  }
+
   // Merge detections within MERGE_M of each other; 2+ matches boost confidence one tier
   mergeNearby(detections) {
     const MERGE_M = 5;
