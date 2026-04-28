@@ -9,7 +9,7 @@ export class CameraScreen {
     this.stream = null;
     this.track = null;
     this.imageCapture = null;
-    this.threshold = 0.70;
+    this.threshold = 0.55;
     this.currentZoom = 1;
     this.processing = false;
     this._overlayCtx = null;
@@ -49,9 +49,9 @@ export class CameraScreen {
         <button class="back-btn" id="cam-back">&#x2190; Map</button>
         <div class="phase-label">Phase 2 &middot; Smart Camera</div>
         <div class="conf-row">
-          <label>Min: <span class="conf-val" id="conf-val">70%</span></label>
+          <label>Min: <span class="conf-val" id="conf-val">55%</span></label>
           <input class="conf-slider" id="conf-slider" type="range"
-                 min="0" max="1" step="0.01" value="0.70" />
+                 min="0" max="1" step="0.01" value="0.55" />
         </div>
       </div>
 
@@ -59,7 +59,7 @@ export class CameraScreen {
         <video id="cam-video" autoplay playsinline muted></video>
         <canvas id="cam-overlay"></canvas>
         <div class="scan-status" id="scan-status">Camera starting&hellip;</div>
-        <div class="range-hint">Best results within 15 yards &mdash; move closer if no detection</div>
+        <div class="range-hint">Best results within 25 yards &mdash; move closer if no detection</div>
       </div>
 
       <div class="camera-controls">
@@ -142,9 +142,17 @@ export class CameraScreen {
         this.imageCapture = new ImageCapture(this.track);
       }
 
-      // Rebuild zoom buttons based on device capabilities
+      // Rebuild zoom buttons and auto-apply 2× (scan is only reachable when in proximity)
       const caps = this.track.getCapabilities?.();
-      if (caps?.zoom) this._buildZoomBtns(caps.zoom);
+      if (caps?.zoom) {
+        this._buildZoomBtns(caps.zoom);
+        if (caps.zoom.max >= 2) {
+          await this._setZoom(2);
+          this.el.querySelectorAll('.zoom-btn').forEach(b => {
+            b.classList.toggle('active', parseFloat(b.dataset.zoom) === 2);
+          });
+        }
+      }
 
       const captureBtn = document.getElementById('capture-btn');
       if (captureBtn) captureBtn.disabled = false;
@@ -212,7 +220,7 @@ export class CameraScreen {
       const best   = result.predictions[0];
       const shotId = this.getActiveShot?.()?.id ?? null;
       this._lastPreds = result.predictions;
-      this._showReview(canvas, best, result.captureWidth, result.captureHeight, best.confidence, shotId);
+      this._showReview(canvas, best, result.captureWidth, result.captureHeight, best.confidence, shotId, result.cropRect);
     } else {
       this._lastPreds = [];
       if (status) { status.textContent = 'No ball detected'; status.className = 'scan-status'; }
@@ -220,7 +228,7 @@ export class CameraScreen {
   }
 
   // ── Review overlay ────────────────────────────────────────────────────
-  _showReview(rawFrame, pred, capW, capH, confidence, shotId) {
+  _showReview(rawFrame, pred, capW, capH, confidence, shotId, cropRect = null) {
     this._reviewData = { shotId, confidence };
 
     // Pause live overlay while review is visible
@@ -245,10 +253,16 @@ export class CameraScreen {
     canvas.height = viewport.offsetHeight;
     const ctx = canvas.getContext('2d');
 
-    // Draw captured frame scaled to fill the canvas
-    ctx.drawImage(rawFrame, 0, 0, canvas.width, canvas.height);
+    // When center-crop was used, draw only that region — gives the user a
+    // zoomed-in view of exactly what the model analyzed.
+    if (cropRect) {
+      ctx.drawImage(rawFrame, cropRect.x, cropRect.y, cropRect.w, cropRect.h,
+                    0, 0, canvas.width, canvas.height);
+    } else {
+      ctx.drawImage(rawFrame, 0, 0, canvas.width, canvas.height);
+    }
 
-    // Scale bounding circle from inference space to canvas display space
+    // Scale bounding circle from inference space (640×480) to canvas display space
     const W  = canvas.width;
     const H  = canvas.height;
     const cx = (pred.x / capW) * W;
@@ -268,11 +282,12 @@ export class CameraScreen {
     ctx.stroke();
     ctx.shadowBlur  = 0;
 
-    const label = `${Math.round(confidence * 100)}%`;
+    const tier  = confidence >= 0.70 ? 'Ball found' : 'Possible ball';
+    const label = `${tier} · ${Math.round(confidence * 100)}%`;
     ctx.font = 'bold 14px -apple-system, sans-serif';
     const tw = ctx.measureText(label).width;
-    ctx.fillStyle = 'rgba(0,0,0,0.7)';
-    ctx.fillRect(cx - tw / 2 - 6, cy + r + 6, tw + 12, 22);
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fillRect(cx - tw / 2 - 8, cy + r + 6, tw + 16, 22);
     ctx.fillStyle = color;
     ctx.fillText(label, cx - tw / 2, cy + r + 22);
 
