@@ -35,7 +35,6 @@ async function init() {
     if (shotId != null) session.updateShotStatus(shotId, 'found');
     showMap();
   };
-  cameraScreen.getGpsContext = () => mapScreen.getGpsContext();
   cameraScreen.getActiveShot = () => mapScreen.getNearestActiveShot();
 
   await mapScreen.init();

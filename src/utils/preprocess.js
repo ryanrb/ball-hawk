@@ -1,20 +1,12 @@
-/**
- * Client-side Canvas API preprocessing pipeline applied before Roboflow inference.
- * Steps (in order):
- *   1. Auto levels (per-channel histogram stretch)
- *   2. Shadow recovery (lift shadows by 25%)
- *   3. Mild unsharp mask (Laplacian-based sharpening kernel)
- *   4. Color-conditional channel filter (ball-color-aware)
- *   5. CLAHE-style local contrast enhancement (tiled histogram equalization)
- */
-export function applyPipeline(canvas, ballColor = 'white') {
+// Preprocessing pipeline applied to each canvas before Roboflow inference.
+export function applyPipeline(canvas) {
   const ctx = canvas.getContext('2d');
   const { width, height } = canvas;
   let id = ctx.getImageData(0, 0, width, height);
   id = autoLevels(id);
   id = shadowRecovery(id, 0.25);
   id = unsharpMask(id, 0.5);
-  id = channelFilter(id, ballColor);
+  id = channelFilter(id);
   id = clahe(id, 64, 4.0);
   ctx.putImageData(id, 0, 0);
   return canvas;
@@ -78,19 +70,14 @@ function unsharpMask(id, amount) {
   return new ImageData(out, w, h);
 }
 
-function channelFilter(id, ballColor) {
+function channelFilter(id) {
   const d = id.data;
   const out = new Uint8ClampedArray(d.length);
   for (let i = 0; i < d.length; i += 4) {
-    let r = d[i], g = d[i+1], b = d[i+2];
-    if (ballColor === 'white') {
-      b = Math.min(255, Math.round(b * 1.15));          // +15% blue
-    } else if (ballColor === 'yellow') {
-      r = Math.min(255, Math.round(r * 1.05));          // violet tint:
-      b = Math.min(255, Math.round(b * 1.10));          // +5% red, +10% blue
-    }
-    // orange: no filter
-    out[i] = r; out[i+1] = g; out[i+2] = b; out[i+3] = d[i+3];
+    out[i]   = d[i];
+    out[i+1] = d[i+1];
+    out[i+2] = Math.min(255, Math.round(d[i+2] * 1.15)); // +15% blue for white balls
+    out[i+3] = d[i+3];
   }
   return new ImageData(out, id.width, id.height);
 }

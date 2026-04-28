@@ -10,9 +10,7 @@ export class CameraScreen {
     this.track = null;
     this.imageCapture = null;
     this.threshold = 0.70;
-    this.ballColor = 'white';
     this.currentZoom = 1;
-    this.sweepMode = false;
     this.processing = false;
     this._overlayCtx = null;
     this._overlayRaf = null;
@@ -20,9 +18,8 @@ export class CameraScreen {
     this._video = null;
     // Callbacks set by main.js
     this.onClose = null;
-    this.onFound = null;       // (shotId, confidence) → void
-    this.getGpsContext = null; // () => { lat, lng, heading, accuracy }
-    this.getActiveShot = null; // () => shot | null
+    this.onFound = null;        // (shotId, confidence) → void
+    this.getActiveShot = null;  // () => shot | null
     this._reviewData = null;   // { shotId, confidence } stored during review
   }
 
@@ -63,19 +60,9 @@ export class CameraScreen {
         <canvas id="cam-overlay"></canvas>
         <div class="scan-status" id="scan-status">Camera starting&hellip;</div>
         <div class="range-hint">Best results within 15 yards &mdash; move closer if no detection</div>
-        <div class="sweep-frames hidden" id="sweep-frames">
-          <div class="sweep-frame-dot" id="sf0"></div>
-          <div class="sweep-frame-dot" id="sf1"></div>
-          <div class="sweep-frame-dot" id="sf2"></div>
-        </div>
       </div>
 
       <div class="camera-controls">
-        <div class="color-selector">
-          <button class="color-btn active" data-color="white">&#x26AA; White</button>
-          <button class="color-btn" data-color="yellow">&#x1F7E1; Yellow</button>
-          <button class="color-btn" data-color="orange">&#x1F7E0; Orange</button>
-        </div>
         <div class="zoom-controls" id="zoom-controls">
           <button class="zoom-btn active" data-zoom="1">1&times;</button>
           <button class="zoom-btn" data-zoom="2">2&times;</button>
@@ -83,7 +70,6 @@ export class CameraScreen {
           <button class="zoom-btn" data-zoom="5">5&times;</button>
         </div>
         <div class="capture-row">
-          <button class="sweep-toggle" id="sweep-toggle">Sweep: OFF</button>
           <button class="capture-btn" id="capture-btn" disabled>&#x1F4F8; Capture</button>
         </div>
       </div>
@@ -111,16 +97,10 @@ export class CameraScreen {
       if (!btn) return;
       if (btn.id === 'cam-back')     { this.onClose?.(); return; }
       if (btn.id === 'capture-btn'   && !this.processing) this._capture();
-      if (btn.id === 'sweep-toggle') this._toggleSweep();
       if (btn.id === 'cam-perm-btn') this._initCamera();
       if (btn.id === 'review-found') this._confirmFound();
       if (btn.id === 'review-keep')  this._dismissReview();
 
-      if (btn.classList.contains('color-btn')) {
-        this.ballColor = btn.dataset.color;
-        this.el.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-      }
       if (btn.classList.contains('zoom-btn')) {
         const z = parseFloat(btn.dataset.zoom);
         this._setZoom(z);
@@ -202,17 +182,6 @@ export class CameraScreen {
     } catch (_) {}
   }
 
-  _toggleSweep() {
-    this.sweepMode = !this.sweepMode;
-    const btn    = document.getElementById('sweep-toggle');
-    const frames = document.getElementById('sweep-frames');
-    if (btn) {
-      btn.textContent = `Sweep: ${this.sweepMode ? 'ON' : 'OFF'}`;
-      btn.classList.toggle('active', this.sweepMode);
-    }
-    frames?.classList.toggle('hidden', !this.sweepMode);
-  }
-
   // ── Capture entry point ───────────────────────────────────────────────
   async _capture() {
     if (this.processing) return;
@@ -220,8 +189,7 @@ export class CameraScreen {
     const captureBtn = document.getElementById('capture-btn');
     if (captureBtn) captureBtn.disabled = true;
     try {
-      if (this.sweepMode) await this._sweepCapture();
-      else                await this._singleCapture();
+      await this._singleCapture();
     } catch (e) {
       console.error('Capture error:', e);
       const status = document.getElementById('scan-status');
@@ -238,7 +206,7 @@ export class CameraScreen {
     if (status) { status.textContent = 'Processing…'; status.className = 'scan-status processing'; }
 
     const canvas = await this._grabFrame();
-    const result = await runWithRefinement(canvas, this.threshold, this.ballColor);
+    const result = await runWithRefinement(canvas, this.threshold);
 
     if (result.predictions.length > 0) {
       const best   = result.predictions[0];
@@ -249,42 +217,6 @@ export class CameraScreen {
       this._lastPreds = [];
       if (status) { status.textContent = 'No ball detected'; status.className = 'scan-status'; }
     }
-  }
-
-  // ── Sweep mode (3 sequential stills) ──────────────────────────────
-  async _sweepCapture() {
-    const status = document.getElementById('scan-status');
-    const dots   = [0, 1, 2].map(i => document.getElementById(`sf${i}`));
-    const allPreds  = [];
-    let lastCanvas  = null;
-
-    for (let i = 0; i < 3; i++) {
-      if (dots[i]) dots[i].className = 'sweep-frame-dot processing';
-      if (status)  { status.textContent = `Sweep ${i + 1}/3…`; status.className = 'scan-status processing'; }
-
-      const canvas = await this._grabFrame();
-      const result = await runWithRefinement(canvas, this.threshold, this.ballColor);
-      if (dots[i]) dots[i].className = 'sweep-frame-dot captured';
-
-      if (result.predictions.length > 0) {
-        lastCanvas = canvas;
-        allPreds.push({ ...result.predictions[0], capW: result.captureWidth, capH: result.captureHeight });
-      }
-
-      if (i < 2) await new Promise(r => setTimeout(r, 500));
-    }
-
-    // Reset sweep dots
-    dots.forEach(d => { if (d) d.className = 'sweep-frame-dot'; });
-
-    if (allPreds.length === 0) {
-      if (status) { status.textContent = 'No ball detected'; status.className = 'scan-status'; }
-      return;
-    }
-
-    const best   = allPreds.reduce((a, b) => a.confidence > b.confidence ? a : b);
-    const shotId = this.getActiveShot?.()?.id ?? null;
-    this._showReview(lastCanvas, best, best.capW, best.capH, best.confidence, shotId);
   }
 
   // ── Review overlay ────────────────────────────────────────────────────
