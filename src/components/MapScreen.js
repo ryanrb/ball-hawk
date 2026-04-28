@@ -206,10 +206,25 @@ export class MapScreen {
   _drawShot(shot) {
     const fromEl = this._makeShotEl(shot.id, 'tee');
     const landEl = this._makeShotEl(shot.id, 'landing');
+    landEl.style.cursor = 'grab';
+
     const fromM = new mapboxgl.Marker({ element: fromEl, anchor: 'bottom' })
       .setLngLat([shot.fromPin.lng, shot.fromPin.lat]).addTo(this.map);
-    const landM = new mapboxgl.Marker({ element: landEl, anchor: 'bottom' })
+    const landM = new mapboxgl.Marker({ element: landEl, anchor: 'bottom', draggable: true })
       .setLngLat([shot.landingPin.lng, shot.landingPin.lat]).addTo(this.map);
+
+    landM.on('drag', () => {
+      const { lat, lng } = landM.getLngLat();
+      shot.landingPin = { lat, lng };
+      this._refreshCircles();
+    });
+
+    landM.on('dragend', () => {
+      const { lat, lng } = landM.getLngLat();
+      session.updateShotLanding(shot.id, { lat, lng });
+      if (this.userCoords) this._checkProximity(this.userCoords);
+    });
+
     this.shotMarkers.set(shot.id, { fromM, landM, fromEl, landEl });
     this._refreshCircles();
     const badge = document.getElementById('shot-count');
