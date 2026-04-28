@@ -464,24 +464,6 @@ html, body {
   pointer-events: none;
 }
 
-.sweep-frames {
-  position: absolute;
-  top: 50%; right: 14px;
-  transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.sweep-frame-dot {
-  width: 10px; height: 10px;
-  border-radius: 50%;
-  background: var(--surface2);
-  border: 1.5px solid var(--text-muted);
-  transition: background 0.2s;
-}
-.sweep-frame-dot.captured   { background: var(--accent); border-color: var(--accent); }
-.sweep-frame-dot.processing { background: var(--warn);   border-color: var(--warn); }
-
 /* ── Camera controls ─────────────────────────────────────────────────── */
 .camera-controls {
   flex-shrink: 0;
@@ -492,22 +474,6 @@ html, body {
   gap: 12px;
   border-top: 1px solid var(--surface2);
 }
-
-.color-selector { display: flex; gap: 8px; justify-content: center; }
-.color-btn {
-  flex: 1;
-  max-width: 110px;
-  padding: 8px 10px;
-  background: var(--surface2);
-  border: 2px solid transparent;
-  border-radius: 12px;
-  color: var(--text-muted);
-  font-size: 13px;
-  cursor: pointer;
-  text-align: center;
-  transition: all 0.15s;
-}
-.color-btn.active { border-color: var(--accent); color: var(--text); background: rgba(0,255,136,0.1); }
 
 .zoom-controls { display: flex; gap: 8px; justify-content: center; }
 .zoom-btn {
@@ -524,19 +490,6 @@ html, body {
 .zoom-btn.active { border-color: var(--accent2); color: var(--text); background: rgba(59,130,246,0.12); }
 
 .capture-row { display: flex; align-items: center; gap: 12px; }
-
-.sweep-toggle {
-  padding: 10px 14px;
-  background: var(--surface2);
-  border: 1px solid var(--surface2);
-  border-radius: 12px;
-  color: var(--text-muted);
-  font-size: 12px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.15s;
-}
-.sweep-toggle.active { border-color: var(--warn); color: var(--warn); background: rgba(251,191,36,0.1); }
 
 .capture-btn {
   flex: 1;

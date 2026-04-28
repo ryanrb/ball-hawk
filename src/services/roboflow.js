@@ -34,11 +34,11 @@ function makeCanvas(w, h) {
  *
  * Returns { predictions, passes, finalConfidence, captureWidth, captureHeight, best }
  */
-export async function runWithRefinement(sourceCanvas, threshold = 0.5, ballColor = 'white') {
+export async function runWithRefinement(sourceCanvas, threshold = 0.5) {
   // Initial inference at 640x480
   const cap = makeCanvas(INFER_W, INFER_H);
   cap.getContext('2d').drawImage(sourceCanvas, 0, 0, INFER_W, INFER_H);
-  applyPipeline(cap, ballColor);
+  applyPipeline(cap);
 
   let preds = await inferCanvas(cap);
   let passes = 1;
@@ -58,7 +58,7 @@ export async function runWithRefinement(sourceCanvas, threshold = 0.5, ballColor
 
     const ref = makeCanvas(1280, 1280);
     ref.getContext('2d').drawImage(cap, cropX, cropY, cropW, cropH, 0, 0, 1280, 1280);
-    applyPipeline(ref, ballColor);
+    applyPipeline(ref);
 
     const refPreds = await inferCanvas(ref);
     passes++;
