@@ -58,8 +58,8 @@ html, body {
 .screen.active { display: flex; }
 
 /* ── Map screen ─────────────────────────────────────────────────────── */
-#map-screen  { position: relative; }
-#bh-map      { position: absolute; inset: 0; }
+/* #map-screen uses position:absolute + inset:0 from .screen — no override needed */
+#bh-map { position: absolute; inset: 0; }
 
 .mapboxgl-map { font-family: inherit !important; }
 .mapboxgl-ctrl-bottom-left { bottom: calc(100px + var(--safe-bottom)) !important; }
