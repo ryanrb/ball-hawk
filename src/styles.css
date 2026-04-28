@@ -553,6 +553,52 @@ html, body {
 .capture-btn:active   { transform: scale(0.97); }
 .capture-btn:disabled { opacity: 0.45; cursor: default; }
 
+/* ── Detection review overlay ────────────────────────────────────────── */
+.review-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+  z-index: 20;
+}
+#review-canvas {
+  flex: 1;
+  width: 100%;
+  display: block;
+  min-height: 0;
+}
+.review-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 12px;
+  padding: 16px 16px calc(var(--safe-bottom) + 16px);
+  background: rgba(13,13,26,0.97);
+  border-top: 1px solid var(--surface2);
+}
+.review-keep-btn {
+  flex: 1;
+  padding: 14px;
+  background: var(--surface2);
+  border: 1px solid var(--surface2);
+  border-radius: 20px;
+  color: var(--text-muted);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.review-found-btn {
+  flex: 2;
+  padding: 14px;
+  background: var(--accent);
+  border: none;
+  border-radius: 20px;
+  color: var(--bg);
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
 /* ── Camera permission overlay ───────────────────────────────────────── */
 .perm-overlay {
   position: absolute;

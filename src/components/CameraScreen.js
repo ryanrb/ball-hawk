@@ -1,7 +1,5 @@
 import { runWithRefinement } from '../services/roboflow.js';
 import { beep, initAudio } from '../utils/audio.js';
-import { destinationPoint, ballDistanceMeters, focalLengthPx } from '../utils/geo.js';
-import { session } from '../services/session.js';
 
 const BOX_FONT = 'bold 13px -apple-system, sans-serif';
 
@@ -22,9 +20,10 @@ export class CameraScreen {
     this._video = null;
     // Callbacks set by main.js
     this.onClose = null;
-    this.onDetection = null;   // (lat, lng, confidence, shotId)
+    this.onFound = null;       // (shotId, confidence) → void
     this.getGpsContext = null; // () => { lat, lng, heading, accuracy }
     this.getActiveShot = null; // () => shot | null
+    this._reviewData = null;   // { shotId, confidence } stored during review
   }
 
   start() {
@@ -114,6 +113,8 @@ export class CameraScreen {
       if (btn.id === 'capture-btn'   && !this.processing) this._capture();
       if (btn.id === 'sweep-toggle') this._toggleSweep();
       if (btn.id === 'cam-perm-btn') this._initCamera();
+      if (btn.id === 'review-found') this._confirmFound();
+      if (btn.id === 'review-keep')  this._dismissReview();
 
       if (btn.classList.contains('color-btn')) {
         this.ballColor = btn.dataset.color;
@@ -240,15 +241,10 @@ export class CameraScreen {
     const result = await runWithRefinement(canvas, this.threshold, this.ballColor);
 
     if (result.predictions.length > 0) {
-      const best = result.predictions[0];
+      const best   = result.predictions[0];
+      const shotId = this.getActiveShot?.()?.id ?? null;
       this._lastPreds = result.predictions;
-      this._dropMapPin(best, result.captureWidth, result.captureHeight);
-      beep();
-      if (status) {
-        const passStr = result.passes > 1 ? ` (${result.passes} passes)` : '';
-        status.textContent = `${Math.round(best.confidence * 100)}% confidence${passStr}`;
-        status.className = 'scan-status detecting';
-      }
+      this._showReview(canvas, best, result.captureWidth, result.captureHeight, best.confidence, shotId);
     } else {
       this._lastPreds = [];
       if (status) { status.textContent = 'No ball detected'; status.className = 'scan-status'; }
@@ -259,7 +255,8 @@ export class CameraScreen {
   async _sweepCapture() {
     const status = document.getElementById('scan-status');
     const dots   = [0, 1, 2].map(i => document.getElementById(`sf${i}`));
-    const allPreds = [];
+    const allPreds  = [];
+    let lastCanvas  = null;
 
     for (let i = 0; i < 3; i++) {
       if (dots[i]) dots[i].className = 'sweep-frame-dot processing';
@@ -270,9 +267,8 @@ export class CameraScreen {
       if (dots[i]) dots[i].className = 'sweep-frame-dot captured';
 
       if (result.predictions.length > 0) {
-        const best    = result.predictions[0];
-        const pinData = this._calcBallPosition(best, result.captureWidth, result.captureHeight);
-        if (pinData) allPreds.push({ ...best, ...pinData });
+        lastCanvas = canvas;
+        allPreds.push({ ...result.predictions[0], capW: result.captureWidth, capH: result.captureHeight });
       }
 
       if (i < 2) await new Promise(r => setTimeout(r, 500));
@@ -286,20 +282,90 @@ export class CameraScreen {
       return;
     }
 
-    // Merge nearby detections; 2+ overlapping → confidence boost
-    const merged = session.mergeNearby(allPreds);
-    for (const det of merged) {
-      if (det.lat != null && det.lng != null) {
-        const shotId = this.getActiveShot?.()?.id ?? null;
-        this.onDetection?.(det.lat, det.lng, det.confidence, shotId);
-        beep();
-      }
-    }
+    const best   = allPreds.reduce((a, b) => a.confidence > b.confidence ? a : b);
+    const shotId = this.getActiveShot?.()?.id ?? null;
+    this._showReview(lastCanvas, best, best.capW, best.capH, best.confidence, shotId);
+  }
 
-    if (status) {
-      status.textContent = `${merged.length} detection${merged.length !== 1 ? 's' : ''} mapped`;
-      status.className = 'scan-status detecting';
-    }
+  // ── Review overlay ────────────────────────────────────────────────────
+  _showReview(rawFrame, pred, capW, capH, confidence, shotId) {
+    this._reviewData = { shotId, confidence };
+
+    // Pause live overlay while review is visible
+    cancelAnimationFrame(this._overlayRaf);
+    this._overlayRaf = null;
+
+    const viewport = this.el.querySelector('.camera-viewport');
+    const div = document.createElement('div');
+    div.className = 'review-overlay';
+    div.id = 'review-overlay';
+    div.innerHTML = `
+      <canvas id="review-canvas"></canvas>
+      <div class="review-actions">
+        <button class="review-keep-btn" id="review-keep">Keep looking</button>
+        <button class="review-found-btn" id="review-found">&#x2713; Found it</button>
+      </div>
+    `;
+    viewport.appendChild(div);
+
+    const canvas = document.getElementById('review-canvas');
+    canvas.width  = viewport.offsetWidth;
+    canvas.height = viewport.offsetHeight;
+    const ctx = canvas.getContext('2d');
+
+    // Draw captured frame scaled to fill the canvas
+    ctx.drawImage(rawFrame, 0, 0, canvas.width, canvas.height);
+
+    // Scale bounding circle from inference space to canvas display space
+    const W  = canvas.width;
+    const H  = canvas.height;
+    const cx = (pred.x / capW) * W;
+    const cy = (pred.y / capH) * H;
+    const r  = ((pred.width / capW) + (pred.height / capH)) / 4 * Math.min(W, H);
+
+    const t     = Math.min(1, (confidence - this.threshold) / (1 - this.threshold));
+    const hue   = Math.round(240 * (1 - t));
+    const color = `hsl(${hue},100%,55%)`;
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, Math.max(r, 12), 0, Math.PI * 2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = 3;
+    ctx.shadowColor = color;
+    ctx.shadowBlur  = 14;
+    ctx.stroke();
+    ctx.shadowBlur  = 0;
+
+    const label = `${Math.round(confidence * 100)}%`;
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    const tw = ctx.measureText(label).width;
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(cx - tw / 2 - 6, cy + r + 6, tw + 12, 22);
+    ctx.fillStyle = color;
+    ctx.fillText(label, cx - tw / 2, cy + r + 22);
+
+    beep();
+  }
+
+  _confirmFound() {
+    if (!this._reviewData) return;
+    const { shotId, confidence } = this._reviewData;
+    this._reviewData = null;
+    this._removeReviewOverlay();
+    this.onFound?.(shotId, confidence);
+  }
+
+  _dismissReview() {
+    this._reviewData = null;
+    this._lastPreds  = [];
+    this._removeReviewOverlay();
+    this._startOverlayLoop();
+    const status = document.getElementById('scan-status');
+    if (status) { status.textContent = 'Ready — tap Capture'; status.className = 'scan-status'; }
+  }
+
+  _removeReviewOverlay() {
+    document.getElementById('review-overlay')?.remove();
   }
 
   // ── Frame grab ──────────────────────────────────────────────────────────
@@ -321,31 +387,6 @@ export class CameraScreen {
     c.height = this._video.videoHeight || 480;
     c.getContext('2d').drawImage(this._video, 0, 0);
     return c;
-  }
-
-  // ── Ball GPS position calculation ────────────────────────────────────
-  _calcBallPosition(pred, capW, capH) {
-    const gpsCtx = this.getGpsContext?.();
-    if (!gpsCtx?.lat || gpsCtx.heading == null) return null;
-
-    const bboxDiam = (pred.width + pred.height) / 2;
-    if (bboxDiam < 1) return null;
-
-    const focal   = focalLengthPx(capW, this.currentZoom);
-    const distM   = ballDistanceMeters(focal, bboxDiam);
-
-    // Sanity check: golf ball should be 1–80 m away when detectable
-    if (distM < 1 || distM > 80) return null;
-
-    return destinationPoint(gpsCtx.lat, gpsCtx.lng, gpsCtx.heading, distM);
-  }
-
-  _dropMapPin(pred, capW, capH) {
-    const pos = this._calcBallPosition(pred, capW, capH);
-    if (pos) {
-      const shotId = this.getActiveShot?.()?.id ?? null;
-      this.onDetection?.(pos.lat, pos.lng, pred.confidence, shotId);
-    }
   }
 
   // ── Overlay render loop ───────────────────────────────────────────────

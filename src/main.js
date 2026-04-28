@@ -3,6 +3,7 @@ import './styles.css';
 import { MapScreen }    from './components/MapScreen.js';
 import { CameraScreen } from './components/CameraScreen.js';
 import { SessionPanel } from './components/SessionPanel.js';
+import { session }      from './services/session.js';
 
 async function init() {
   const app = document.getElementById('app');
@@ -30,8 +31,10 @@ async function init() {
   mapScreen.onSessionRequest = () => sessionPanel.show();
 
   cameraScreen.onClose      = () => showMap();
-  cameraScreen.onDetection  = (lat, lng, conf, shotId) =>
-    mapScreen.addDetectionPin(lat, lng, conf, shotId);
+  cameraScreen.onFound      = (shotId, confidence) => {
+    if (shotId != null) session.updateShotStatus(shotId, 'found');
+    showMap();
+  };
   cameraScreen.getGpsContext = () => mapScreen.getGpsContext();
   cameraScreen.getActiveShot = () => mapScreen.getNearestActiveShot();
 
