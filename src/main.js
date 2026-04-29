@@ -57,6 +57,8 @@ async function init() {
     cameraScreen.stop();
     camEl.classList.remove('active');
     mapEl.classList.add('active');
+    // Mapbox doesn't track container size while hidden; resize after layout settles.
+    requestAnimationFrame(() => mapScreen.map?.resize());
   }
 }
 
