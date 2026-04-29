@@ -251,7 +251,6 @@ export class CameraScreen {
     cancelAnimationFrame(this._overlayRaf);
     this._overlayRaf = null;
 
-    const viewport = this.el.querySelector('.camera-viewport');
     const div = document.createElement('div');
     div.className = 'review-overlay';
     div.id = 'review-overlay';
@@ -262,60 +261,65 @@ export class CameraScreen {
         <button class="review-found-btn" id="review-found">&#x2713; Found it</button>
       </div>
     `;
-    viewport.appendChild(div);
+    // Append to the full camera screen so the overlay covers header + controls too
+    this.el.appendChild(div);
 
-    const canvas = document.getElementById('review-canvas');
-    canvas.width  = viewport.offsetWidth;
-    canvas.height = viewport.offsetHeight;
-    const ctx = canvas.getContext('2d');
+    // Read canvas dimensions after the browser has settled the flex layout
+    requestAnimationFrame(() => {
+      const canvas = document.getElementById('review-canvas');
+      if (!canvas) return; // guard: dismissed before RAF fired
+      canvas.width  = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+      const ctx = canvas.getContext('2d');
 
-    // Source region to draw (the crop, or the full frame)
-    const srcX = cropRect ? cropRect.x : 0;
-    const srcY = cropRect ? cropRect.y : 0;
-    const srcW = cropRect ? cropRect.w : rawFrame.width;
-    const srcH = cropRect ? cropRect.h : rawFrame.height;
+      // Source region to draw (the crop, or the full frame)
+      const srcX = cropRect ? cropRect.x : 0;
+      const srcY = cropRect ? cropRect.y : 0;
+      const srcW = cropRect ? cropRect.w : rawFrame.width;
+      const srcH = cropRect ? cropRect.h : rawFrame.height;
 
-    // Fit the source into the canvas while preserving aspect ratio (letterbox)
-    const scale  = Math.min(canvas.width / srcW, canvas.height / srcH);
-    const drawW  = srcW * scale;
-    const drawH  = srcH * scale;
-    const drawX  = (canvas.width  - drawW) / 2;
-    const drawY  = (canvas.height - drawH) / 2;
+      // Fit the source into the canvas while preserving aspect ratio (letterbox)
+      const scale = Math.min(canvas.width / srcW, canvas.height / srcH);
+      const drawW = srcW * scale;
+      const drawH = srcH * scale;
+      const drawX = (canvas.width  - drawW) / 2;
+      const drawY = (canvas.height - drawH) / 2;
 
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(rawFrame, srcX, srcY, srcW, srcH, drawX, drawY, drawW, drawH);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(rawFrame, srcX, srcY, srcW, srcH, drawX, drawY, drawW, drawH);
 
-    // Scale bounding circle from inference space (640×480) into the letterboxed draw area
-    const W  = drawW;
-    const H  = drawH;
-    const cx = drawX + (pred.x / capW) * W;
-    const cy = drawY + (pred.y / capH) * H;
-    const r  = ((pred.width / capW) + (pred.height / capH)) / 4 * Math.min(W, H);
+      // Scale bounding circle from inference space (640×480) into the letterboxed draw area
+      const W  = drawW;
+      const H  = drawH;
+      const cx = drawX + (pred.x / capW) * W;
+      const cy = drawY + (pred.y / capH) * H;
+      const r  = ((pred.width / capW) + (pred.height / capH)) / 4 * Math.min(W, H);
 
-    const t     = Math.min(1, (confidence - this.threshold) / (1 - this.threshold));
-    const hue   = Math.round(240 * (1 - t));
-    const color = `hsl(${hue},100%,55%)`;
+      const t     = Math.min(1, (confidence - this.threshold) / (1 - this.threshold));
+      const hue   = Math.round(240 * (1 - t));
+      const color = `hsl(${hue},100%,55%)`;
 
-    ctx.beginPath();
-    ctx.arc(cx, cy, Math.max(r, 12), 0, Math.PI * 2);
-    ctx.strokeStyle = color;
-    ctx.lineWidth   = 3;
-    ctx.shadowColor = color;
-    ctx.shadowBlur  = 14;
-    ctx.stroke();
-    ctx.shadowBlur  = 0;
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.max(r, 12), 0, Math.PI * 2);
+      ctx.strokeStyle = color;
+      ctx.lineWidth   = 3;
+      ctx.shadowColor = color;
+      ctx.shadowBlur  = 14;
+      ctx.stroke();
+      ctx.shadowBlur  = 0;
 
-    const tier  = confidence >= 0.70 ? 'Ball found' : 'Possible ball';
-    const label = `${tier} · ${Math.round(confidence * 100)}%`;
-    ctx.font = 'bold 14px -apple-system, sans-serif';
-    const tw = ctx.measureText(label).width;
-    ctx.fillStyle = 'rgba(0,0,0,0.75)';
-    ctx.fillRect(cx - tw / 2 - 8, cy + r + 6, tw + 16, 22);
-    ctx.fillStyle = color;
-    ctx.fillText(label, cx - tw / 2, cy + r + 22);
+      const tier  = confidence >= 0.70 ? 'Ball found' : 'Possible ball';
+      const label = `${tier} · ${Math.round(confidence * 100)}%`;
+      ctx.font = 'bold 14px -apple-system, sans-serif';
+      const tw = ctx.measureText(label).width;
+      ctx.fillStyle = 'rgba(0,0,0,0.75)';
+      ctx.fillRect(cx - tw / 2 - 8, cy + r + 6, tw + 16, 22);
+      ctx.fillStyle = color;
+      ctx.fillText(label, cx - tw / 2, cy + r + 22);
 
-    beep();
+      beep();
+    });
   }
 
   _confirmFound() {
