@@ -80,45 +80,53 @@ async function inferWithRefinement(cap, threshold) {
  * review screen to display the cropped region at full detail).
  */
 export async function runWithRefinement(sourceCanvas, threshold = 0.5) {
-  // Pass 1: center crop → effectively 3× zoom from the raw sensor frame
-  const crop = centerCropRect(sourceCanvas);
-  const cap1 = makeCanvas(INFER_W, INFER_H);
-  cap1.getContext('2d').drawImage(
-    sourceCanvas, crop.x, crop.y, crop.w, crop.h, 0, 0, INFER_W, INFER_H
-  );
-  applyPipeline(cap1);
-  const r1 = await inferWithRefinement(cap1, threshold);
+  // Center-crop is only beneficial when the source is significantly larger than
+  // the inference canvas (i.e. we have a real high-res sensor frame). If the
+  // source is already near 640×480 (video-element fallback), cropping 1/3 would
+  // just upscale a blurry patch — skip straight to full-frame in that case.
+  const highRes = sourceCanvas.width > INFER_W * 2 && sourceCanvas.height > INFER_H * 2;
 
-  if (r1) {
-    return {
-      predictions:     r1.preds.filter(p => p.confidence >= threshold),
-      passes:          r1.passes,
-      finalConfidence: r1.best.confidence,
-      captureWidth:    INFER_W,
-      captureHeight:   INFER_H,
-      best:            r1.best,
-      cropRect:        crop,
-    };
+  if (highRes) {
+    // Pass 1: center crop → effectively 3× zoom from the raw sensor frame
+    const crop = centerCropRect(sourceCanvas);
+    const cap1 = makeCanvas(INFER_W, INFER_H);
+    cap1.getContext('2d').drawImage(
+      sourceCanvas, crop.x, crop.y, crop.w, crop.h, 0, 0, INFER_W, INFER_H
+    );
+    applyPipeline(cap1);
+    const r1 = await inferWithRefinement(cap1, threshold);
+
+    if (r1) {
+      return {
+        predictions:     r1.preds.filter(p => p.confidence >= threshold),
+        passes:          r1.passes,
+        finalConfidence: r1.best.confidence,
+        captureWidth:    INFER_W,
+        captureHeight:   INFER_H,
+        best:            r1.best,
+        cropRect:        crop,
+      };
+    }
   }
 
-  // Pass 2: full-frame fallback
-  const cap2 = makeCanvas(INFER_W, INFER_H);
-  cap2.getContext('2d').drawImage(sourceCanvas, 0, 0, INFER_W, INFER_H);
-  applyPipeline(cap2);
-  const r2 = await inferWithRefinement(cap2, threshold);
+  // Full-frame inference (only pass on low-res source; pass 2 fallback on high-res)
+  const cap = makeCanvas(INFER_W, INFER_H);
+  cap.getContext('2d').drawImage(sourceCanvas, 0, 0, INFER_W, INFER_H);
+  applyPipeline(cap);
+  const r = await inferWithRefinement(cap, threshold);
 
-  if (!r2) {
-    return { predictions: [], passes: 2, finalConfidence: 0,
+  if (!r) {
+    return { predictions: [], passes: highRes ? 2 : 1, finalConfidence: 0,
              captureWidth: INFER_W, captureHeight: INFER_H, best: null, cropRect: null };
   }
 
   return {
-    predictions:     r2.preds.filter(p => p.confidence >= threshold),
-    passes:          r2.passes + 1, // +1 for the failed crop pass
-    finalConfidence: r2.best.confidence,
+    predictions:     r.preds.filter(p => p.confidence >= threshold),
+    passes:          highRes ? r.passes + 1 : r.passes,
+    finalConfidence: r.best.confidence,
     captureWidth:    INFER_W,
     captureHeight:   INFER_H,
-    best:            r2.best,
+    best:            r.best,
     cropRect:        null,
   };
 }
