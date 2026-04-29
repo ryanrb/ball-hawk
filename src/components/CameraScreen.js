@@ -269,20 +269,28 @@ export class CameraScreen {
     canvas.height = viewport.offsetHeight;
     const ctx = canvas.getContext('2d');
 
-    // When center-crop was used, draw only that region — gives the user a
-    // zoomed-in view of exactly what the model analyzed.
-    if (cropRect) {
-      ctx.drawImage(rawFrame, cropRect.x, cropRect.y, cropRect.w, cropRect.h,
-                    0, 0, canvas.width, canvas.height);
-    } else {
-      ctx.drawImage(rawFrame, 0, 0, canvas.width, canvas.height);
-    }
+    // Source region to draw (the crop, or the full frame)
+    const srcX = cropRect ? cropRect.x : 0;
+    const srcY = cropRect ? cropRect.y : 0;
+    const srcW = cropRect ? cropRect.w : rawFrame.width;
+    const srcH = cropRect ? cropRect.h : rawFrame.height;
 
-    // Scale bounding circle from inference space (640×480) to canvas display space
-    const W  = canvas.width;
-    const H  = canvas.height;
-    const cx = (pred.x / capW) * W;
-    const cy = (pred.y / capH) * H;
+    // Fit the source into the canvas while preserving aspect ratio (letterbox)
+    const scale  = Math.min(canvas.width / srcW, canvas.height / srcH);
+    const drawW  = srcW * scale;
+    const drawH  = srcH * scale;
+    const drawX  = (canvas.width  - drawW) / 2;
+    const drawY  = (canvas.height - drawH) / 2;
+
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(rawFrame, srcX, srcY, srcW, srcH, drawX, drawY, drawW, drawH);
+
+    // Scale bounding circle from inference space (640×480) into the letterboxed draw area
+    const W  = drawW;
+    const H  = drawH;
+    const cx = drawX + (pred.x / capW) * W;
+    const cy = drawY + (pred.y / capH) * H;
     const r  = ((pred.width / capW) + (pred.height / capH)) / 4 * Math.min(W, H);
 
     const t     = Math.min(1, (confidence - this.threshold) / (1 - this.threshold));
