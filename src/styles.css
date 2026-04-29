@@ -464,6 +464,23 @@ html, body {
   pointer-events: none;
 }
 
+.portrait-warning {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(13,13,26,0.85);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  color: var(--warn);
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+  padding: 24px;
+  z-index: 15;
+}
+
 /* ── Camera controls ─────────────────────────────────────────────────── */
 .camera-controls {
   flex-shrink: 0;

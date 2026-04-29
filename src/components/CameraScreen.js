@@ -21,17 +21,23 @@ export class CameraScreen {
     this.onFound = null;        // (shotId, confidence) → void
     this.getActiveShot = null;  // () => shot | null
     this._reviewData = null;   // { shotId, confidence } stored during review
+    this._orientationHandler = null;
   }
 
   start() {
     this._render();
     this._bindUI();
     this._initCamera();
+    this._orientationHandler = () => this._checkOrientation();
+    window.addEventListener('resize', this._orientationHandler);
+    this._checkOrientation();
   }
 
   stop() {
     cancelAnimationFrame(this._overlayRaf);
     this._overlayRaf = null;
+    window.removeEventListener('resize', this._orientationHandler);
+    this._orientationHandler = null;
     if (this.stream) {
       this.stream.getTracks().forEach(t => t.stop());
       this.stream = null;
@@ -60,6 +66,9 @@ export class CameraScreen {
         <canvas id="cam-overlay"></canvas>
         <div class="scan-status" id="scan-status">Camera starting&hellip;</div>
         <div class="range-hint">Best results within 25 yards &mdash; move closer if no detection</div>
+        <div class="portrait-warning hidden" id="portrait-warning">
+          &#x1F504; Rotate to landscape for best detection
+        </div>
       </div>
 
       <div class="camera-controls">
@@ -188,6 +197,13 @@ export class CameraScreen {
     try {
       await this.track.applyConstraints({ advanced: [{ zoom }] });
     } catch (_) {}
+  }
+
+  _checkOrientation() {
+    const portrait = window.innerHeight > window.innerWidth;
+    document.getElementById('portrait-warning')?.classList.toggle('hidden', !portrait);
+    const btn = document.getElementById('capture-btn');
+    if (btn && !this.processing) btn.disabled = portrait;
   }
 
   // ── Capture entry point ───────────────────────────────────────────────
