@@ -21,17 +21,23 @@ export class CameraScreen {
     this.onFound = null;        // (shotId, confidence) → void
     this.getActiveShot = null;  // () => shot | null
     this._reviewData = null;   // { shotId, confidence } stored during review
+    this._orientationHandler = null;
   }
 
   start() {
     this._render();
     this._bindUI();
     this._initCamera();
+    this._orientationHandler = () => this._checkOrientation();
+    window.addEventListener('resize', this._orientationHandler);
+    this._checkOrientation();
   }
 
   stop() {
     cancelAnimationFrame(this._overlayRaf);
     this._overlayRaf = null;
+    window.removeEventListener('resize', this._orientationHandler);
+    this._orientationHandler = null;
     if (this.stream) {
       this.stream.getTracks().forEach(t => t.stop());
       this.stream = null;
@@ -60,6 +66,9 @@ export class CameraScreen {
         <canvas id="cam-overlay"></canvas>
         <div class="scan-status" id="scan-status">Camera starting&hellip;</div>
         <div class="range-hint">Best results within 25 yards &mdash; move closer if no detection</div>
+        <div class="portrait-warning hidden" id="portrait-warning">
+          &#x1F504; Rotate to landscape for best detection
+        </div>
       </div>
 
       <div class="camera-controls">
@@ -190,6 +199,13 @@ export class CameraScreen {
     } catch (_) {}
   }
 
+  _checkOrientation() {
+    const portrait = window.innerHeight > window.innerWidth;
+    document.getElementById('portrait-warning')?.classList.toggle('hidden', !portrait);
+    const btn = document.getElementById('capture-btn');
+    if (btn && !this.processing) btn.disabled = portrait;
+  }
+
   // ── Capture entry point ───────────────────────────────────────────────
   async _capture() {
     if (this.processing) return;
@@ -253,20 +269,28 @@ export class CameraScreen {
     canvas.height = viewport.offsetHeight;
     const ctx = canvas.getContext('2d');
 
-    // When center-crop was used, draw only that region — gives the user a
-    // zoomed-in view of exactly what the model analyzed.
-    if (cropRect) {
-      ctx.drawImage(rawFrame, cropRect.x, cropRect.y, cropRect.w, cropRect.h,
-                    0, 0, canvas.width, canvas.height);
-    } else {
-      ctx.drawImage(rawFrame, 0, 0, canvas.width, canvas.height);
-    }
+    // Source region to draw (the crop, or the full frame)
+    const srcX = cropRect ? cropRect.x : 0;
+    const srcY = cropRect ? cropRect.y : 0;
+    const srcW = cropRect ? cropRect.w : rawFrame.width;
+    const srcH = cropRect ? cropRect.h : rawFrame.height;
 
-    // Scale bounding circle from inference space (640×480) to canvas display space
-    const W  = canvas.width;
-    const H  = canvas.height;
-    const cx = (pred.x / capW) * W;
-    const cy = (pred.y / capH) * H;
+    // Fit the source into the canvas while preserving aspect ratio (letterbox)
+    const scale  = Math.min(canvas.width / srcW, canvas.height / srcH);
+    const drawW  = srcW * scale;
+    const drawH  = srcH * scale;
+    const drawX  = (canvas.width  - drawW) / 2;
+    const drawY  = (canvas.height - drawH) / 2;
+
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(rawFrame, srcX, srcY, srcW, srcH, drawX, drawY, drawW, drawH);
+
+    // Scale bounding circle from inference space (640×480) into the letterboxed draw area
+    const W  = drawW;
+    const H  = drawH;
+    const cx = drawX + (pred.x / capW) * W;
+    const cy = drawY + (pred.y / capH) * H;
     const r  = ((pred.width / capW) + (pred.height / capH)) / 4 * Math.min(W, H);
 
     const t     = Math.min(1, (confidence - this.threshold) / (1 - this.threshold));
