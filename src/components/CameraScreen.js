@@ -65,21 +65,23 @@ export class CameraScreen {
         <video id="cam-video" autoplay playsinline muted></video>
         <canvas id="cam-overlay"></canvas>
         <div class="scan-status" id="scan-status">Camera starting&hellip;</div>
-        <div class="range-hint">Best results within 25 yards &mdash; move closer if no detection</div>
         <div class="portrait-warning hidden" id="portrait-warning">
           &#x1F504; Rotate to landscape for best detection
         </div>
-      </div>
 
-      <div class="camera-controls">
-        <div class="zoom-controls" id="zoom-controls">
-          <button class="zoom-btn active" data-zoom="1">1&times;</button>
-          <button class="zoom-btn" data-zoom="2">2&times;</button>
-          <button class="zoom-btn" data-zoom="3">3&times;</button>
-          <button class="zoom-btn" data-zoom="5">5&times;</button>
-        </div>
-        <div class="capture-row">
-          <button class="capture-btn" id="capture-btn" disabled>&#x1F4F8; Capture</button>
+        <div class="camera-controls">
+          <p class="range-hint">Best results within 25 yards</p>
+          <div class="zoom-controls" id="zoom-controls">
+            <button class="zoom-btn active" data-zoom="1">1&times;</button>
+            <button class="zoom-btn" data-zoom="2">2&times;</button>
+            <button class="zoom-btn" data-zoom="3">3&times;</button>
+            <button class="zoom-btn" data-zoom="5">5&times;</button>
+          </div>
+          <div class="shutter-row">
+            <button class="shutter-btn" id="capture-btn" disabled>
+              <span class="shutter-inner"></span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -285,8 +287,14 @@ export class CameraScreen {
       const drawX = (canvas.width  - drawW) / 2;
       const drawY = (canvas.height - drawH) / 2;
 
-      ctx.fillStyle = '#000';
+      // Dim stretched version fills bar areas with scene context
+      ctx.globalAlpha = 0.35;
+      ctx.drawImage(rawFrame, srcX, srcY, srcW, srcH, 0, 0, canvas.width, canvas.height);
+      ctx.globalAlpha = 1;
+      // Dark overlay makes bars clearly distinct from the sharp image
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Crisp letterboxed image overwrites the center
       ctx.drawImage(rawFrame, srcX, srcY, srcW, srcH, drawX, drawY, drawW, drawH);
 
       // Scale bounding circle from inference space (640×480) into the letterboxed draw area
