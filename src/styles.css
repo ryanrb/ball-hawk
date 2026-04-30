@@ -362,12 +362,14 @@ html, body {
 
 .camera-header {
   flex-shrink: 0;
-  background: rgba(13,13,26,0.97);
+  background: rgba(13,13,26,0.45);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
   padding: calc(var(--safe-top) + 10px) 16px 10px;
   display: flex;
   align-items: center;
   gap: 12px;
-  border-bottom: 1px solid var(--surface2);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
 }
 
 .back-btn {
@@ -451,13 +453,6 @@ html, body {
 .scan-status.processing { color: var(--warn); }
 .scan-status.error      { color: #ef4444; }
 
-.range-hint {
-  font-size: 11px;
-  color: rgba(255,255,255,0.45);
-  white-space: nowrap;
-  pointer-events: none;
-  text-align: center;
-}
 
 .portrait-warning {
   position: absolute;
@@ -476,22 +471,24 @@ html, body {
   z-index: 15;
 }
 
-/* ── Camera controls (floated over viewport) ─────────────────────────── */
+/* ── Camera controls (right-side overlay) ────────────────────────────── */
 .camera-controls {
   position: absolute;
-  bottom: 0; left: 0; right: 0;
-  padding: 0 24px calc(var(--safe-bottom) + 24px);
+  right: 0; top: 0; bottom: 0;
+  padding: 20px 16px calc(var(--safe-bottom) + 20px) 28px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
-  background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.65) 35%);
+  justify-content: flex-end;
+  gap: 20px;
+  background: linear-gradient(to left, rgba(0,0,0,0.55) 10%, transparent);
   pointer-events: none;
   z-index: 10;
 }
 
 .zoom-controls {
   display: flex;
+  flex-direction: column;
   gap: 2px;
   background: rgba(0,0,0,0.45);
   backdrop-filter: blur(10px);
@@ -506,10 +503,10 @@ html, body {
   color: rgba(255,255,255,0.55);
   font-size: 13px;
   font-weight: 700;
-  padding: 5px 12px;
+  padding: 7px 10px;
   border-radius: 17px;
   cursor: pointer;
-  min-width: 40px;
+  min-width: 42px;
   text-align: center;
   transition: background 0.15s, color 0.15s;
 }
