@@ -308,7 +308,7 @@ export class MapScreen {
 
     this._pendingFrom = { lat: this.userCoords.lat, lng: this.userCoords.lng };
 
-    const el = this._makeShotEl(session._shotSeq, 'tee');
+    const el = this._makeShotEl(session.shots.length + 1, 'tee');
     this._pendingFromMarker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
       .setLngLat([this._pendingFrom.lng, this._pendingFrom.lat]).addTo(this.map);
 
@@ -341,8 +341,8 @@ export class MapScreen {
   }
 
   _drawShot(shot) {
-    const fromEl = this._makeShotEl(shot.id, 'tee');
-    const landEl = this._makeShotEl(shot.id, 'landing');
+    const fromEl = this._makeShotEl(shot.num, 'tee');
+    const landEl = this._makeShotEl(shot.num, 'landing');
     landEl.style.cursor = 'grab';
 
     const fromM = new mapboxgl.Marker({ element: fromEl, anchor: 'bottom' })
@@ -422,10 +422,22 @@ export class MapScreen {
     this.shotMarkers.delete(this._pendingRemoveId);
     this.inRange.delete(this._pendingRemoveId);
     this._alertedIds.delete(this._pendingRemoveId);
-    session.removeShot(this._pendingRemoveId);
+    session.removeShot(this._pendingRemoveId); // also renumbers session.shots[*].num
+    this._renumberShots();
     if (this.userCoords) this._checkProximity(this.userCoords);
     this._updateShotCount();
     this._cancelRemoveShot();
+  }
+
+  _renumberShots() {
+    for (const [id, { fromEl, landEl }] of this.shotMarkers) {
+      const shot = session.shots.find(s => s.id === id);
+      if (!shot) continue;
+      const fromNum = fromEl.querySelector('.shot-number');
+      const landNum = landEl.querySelector('.shot-number');
+      if (fromNum) fromNum.textContent = shot.num;
+      if (landNum) landNum.textContent = shot.num;
+    }
   }
 
   _cancelRemoveShot() {
