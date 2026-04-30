@@ -13,7 +13,7 @@
   --safe-top:    env(safe-area-inset-top,    0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --header-h:    60px;
-  --sheet-peek:  90px;
+  --sheet-peek:  72px;
 }
 
 html, body {
@@ -312,7 +312,7 @@ html, body {
 .action-sheet.dismissed { transform: translateY(calc(100% + var(--safe-bottom))); }
 
 .sheet-peek {
-  min-height: var(--sheet-peek);
+  min-height: 90px; /* keeps options section below the visible 72px fold */
   padding: 10px 20px 12px;
   cursor: pointer;
   user-select: none;

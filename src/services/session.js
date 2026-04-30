@@ -11,7 +11,8 @@ class SessionService {
 
   addShot(fromPin, landingPin) {
     const shot = {
-      id: this._shotSeq++,
+      id:  this._shotSeq++,
+      num: this.shots.length + 1,
       fromPin,
       landingPin,
       timestamp: Date.now(),
@@ -35,7 +36,11 @@ class SessionService {
 
   removeShot(id) {
     const idx = this.shots.findIndex(s => s.id === id);
-    if (idx !== -1) { this.shots.splice(idx, 1); this._emit(); }
+    if (idx !== -1) {
+      this.shots.splice(idx, 1);
+      this.shots.forEach((s, i) => { s.num = i + 1; }); // keep numbers sequential
+      this._emit();
+    }
   }
 
   updateShotStatus(shotId, status) {
