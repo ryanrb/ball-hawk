@@ -13,7 +13,7 @@
   --safe-top:    env(safe-area-inset-top,    0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --header-h:    60px;
-  --sheet-h:     308px;
+  --sheet-peek:  72px;
 }
 
 html, body {
@@ -64,7 +64,7 @@ html, body {
 #bh-map { position: absolute; inset: 0; }
 
 .mapboxgl-map { font-family: inherit !important; }
-.mapboxgl-ctrl-bottom-left { bottom: calc(var(--sheet-h) + var(--safe-bottom) + 16px) !important; }
+.mapboxgl-ctrl-bottom-left { bottom: calc(var(--sheet-peek) + var(--safe-bottom) + 16px) !important; }
 .mapboxgl-ctrl-attrib { background: rgba(0,0,0,0.5) !important; }
 .mapboxgl-ctrl-attrib, .mapboxgl-ctrl-attrib a { color: rgba(255,255,255,0.5) !important; }
 
@@ -263,22 +263,26 @@ html, body {
   box-shadow: 0 -8px 40px rgba(0,0,0,0.5);
   z-index: 20;
   padding-bottom: var(--safe-bottom);
+  transform: translateY(calc(100% - var(--sheet-peek) - var(--safe-bottom)));
   transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
 }
-.action-sheet.dismissed {
-  transform: translateY(calc(100% + var(--safe-bottom)));
-}
+.action-sheet.expanded  { transform: translateY(0); }
+.action-sheet.dismissed { transform: translateY(calc(100% + var(--safe-bottom))); }
 
 .sheet-peek {
-  padding: 10px 20px 6px;
+  padding: 10px 20px 8px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .sheet-prompt {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-muted);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
   text-align: center;
   letter-spacing: 0.01em;
+  margin-top: 6px;
 }
 
 .shot-badge {
@@ -356,7 +360,7 @@ html, body {
 /* ── Range tip ───────────────────────────────────────────────────────── */
 .range-tip {
   position: fixed;
-  bottom: calc(var(--sheet-h) + var(--safe-bottom) + 12px);
+  bottom: calc(var(--sheet-peek) + var(--safe-bottom) + 12px);
   left: 50%;
   transform: translateX(-50%);
   background: rgba(13,13,26,0.88);

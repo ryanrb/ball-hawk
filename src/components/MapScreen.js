@@ -79,7 +79,7 @@ export class MapScreen {
       </div>
 
       <div class="action-sheet" id="action-sheet">
-        <div class="sheet-peek">
+        <div class="sheet-peek" id="sheet-peek">
           <div class="sheet-handle"></div>
           <div class="sheet-prompt">Where is your ball?</div>
         </div>
@@ -197,6 +197,36 @@ export class MapScreen {
     this.map.on('click', e => {
       if (this.markingMode) this._confirmLanding(e.lngLat);
     });
+
+    this._bindSheetGesture();
+  }
+
+  _bindSheetGesture() {
+    const peek  = document.getElementById('sheet-peek');
+    const sheet = document.getElementById('action-sheet');
+    if (!peek || !sheet) return;
+
+    let startY       = 0;
+    let touchFired   = false;
+
+    peek.addEventListener('touchstart', e => {
+      startY     = e.touches[0].clientY;
+      touchFired = false;
+    }, { passive: true });
+
+    peek.addEventListener('touchend', e => {
+      touchFired   = true;
+      const dy     = startY - e.changedTouches[0].clientY; // positive = swipe up
+      if (dy > 20)       sheet.classList.add('expanded');
+      else if (dy < -20) sheet.classList.remove('expanded');
+      else               sheet.classList.toggle('expanded'); // tap
+      setTimeout(() => { touchFired = false; }, 400);
+    }, { passive: true });
+
+    peek.addEventListener('click', () => {
+      if (touchFired) return; // touch already handled it
+      sheet.classList.toggle('expanded');
+    });
   }
 
   // ── Menu drawer ────────────────────────────────────────────────────────
@@ -215,7 +245,9 @@ export class MapScreen {
 
   // ── Action sheet ───────────────────────────────────────────────────────
   _dismissSheet() {
-    document.getElementById('action-sheet')?.classList.add('dismissed');
+    const sheet = document.getElementById('action-sheet');
+    sheet?.classList.remove('expanded');
+    sheet?.classList.add('dismissed');
   }
 
   _restoreSheet() {
