@@ -38,18 +38,39 @@ export class MapScreen {
       <div id="bh-map"></div>
 
       <div class="map-header">
-        <div class="app-title">&#x26F3; Ball Hawk</div>
-        <div class="map-header-right">
-          <div class="gps-status">
-            <div class="gps-dot" id="gps-dot"></div>
-            <span id="gps-text">Locating&hellip;</span>
-          </div>
-          <button class="layer-toggle" id="layer-toggle">&#x1F6F0; Satellite</button>
+        <button class="hamburger-btn" id="hamburger-btn" aria-label="Menu">
+          <span></span><span></span><span></span>
+        </button>
+        <div class="header-title">
+          <span class="header-logo">&#x26F3;</span>
+          <span class="header-wordmark">BALL HAWK</span>
+        </div>
+        <div class="gps-status">
+          <div class="gps-dot" id="gps-dot"></div>
+          <span id="gps-text">Locating&hellip;</span>
         </div>
       </div>
 
+      <div class="menu-drawer" id="menu-drawer">
+        <button class="menu-item" id="layer-toggle">
+          <div class="menu-item-icon" id="layer-icon">&#x1F6F0;&#xFE0F;</div>
+          <div class="menu-item-body">
+            <div class="menu-item-title" id="layer-title">Satellite View</div>
+            <div class="menu-item-desc">Toggle aerial imagery</div>
+          </div>
+        </button>
+        <button class="menu-item" id="session-btn">
+          <div class="menu-item-icon">&#x1F4CB;</div>
+          <div class="menu-item-body">
+            <div class="menu-item-title">Shot History</div>
+            <div class="menu-item-desc"><span class="shot-count">0</span> shots this session</div>
+          </div>
+        </button>
+      </div>
+      <div class="menu-overlay hidden" id="menu-overlay"></div>
+
       <div class="proximity-banner hidden" id="prox-banner">
-        &#x1F3AF; You&rsquo;re in range &mdash; start scanning
+        &#x1F3AF; You&rsquo;re in range &mdash; tap Scan to detect
       </div>
 
       <div class="marking-banner hidden" id="mark-banner">
@@ -57,12 +78,45 @@ export class MapScreen {
         <button class="cancel-btn" id="cancel-mark">Cancel</button>
       </div>
 
-      <div class="map-actions">
-        <button class="session-btn" id="session-btn">
-          <span class="shot-badge" id="shot-count">0</span> History
-        </button>
-        <button class="mark-shot-btn" id="mark-shot-btn">&#x1F4CD; Mark Shot</button>
-        <button class="camera-btn hidden" id="camera-btn">&#x1F4F7; Scan</button>
+      <div class="action-sheet" id="action-sheet">
+        <div class="sheet-peek" id="sheet-peek">
+          <div class="sheet-handle"></div>
+          <div class="sheet-prompt">Where is your ball?</div>
+          <div class="sheet-quick-btns">
+            <button class="history-quick-btn" id="history-quick-btn">
+              <span class="shot-badge shot-count">0</span>&nbsp;History
+            </button>
+            <button class="mark-quick-btn" id="mark-shot-btn">
+              &#x1F4CD;&nbsp;Mark Shot
+            </button>
+          </div>
+        </div>
+        <div class="sheet-options">
+          <button class="action-option" id="mark-shot-opt">
+            <div class="action-opt-icon mark-opt-icon">&#x1F4CD;</div>
+            <div class="action-opt-text">
+              <div class="action-opt-title">Mark Your Shot</div>
+              <div class="action-opt-desc">Tag landing zone after shot</div>
+            </div>
+            <span class="action-opt-chevron">&#x203A;</span>
+          </button>
+          <button class="action-option" id="camera-btn">
+            <div class="action-opt-icon scan-opt-icon">&#x1F4F7;</div>
+            <div class="action-opt-text">
+              <div class="action-opt-title">Take a High-Res Scan</div>
+              <div class="action-opt-desc">Zoom and scan distant spots</div>
+            </div>
+            <span class="action-opt-chevron">&#x203A;</span>
+          </button>
+          <button class="action-option sweep-option" disabled>
+            <div class="action-opt-icon sweep-opt-icon">&#x1F50D;</div>
+            <div class="action-opt-text">
+              <div class="action-opt-title">Perform a Live Sweep</div>
+              <div class="action-opt-desc">Scan close-range grass</div>
+            </div>
+            <span class="coming-soon-badge">Soon</span>
+          </button>
+        </div>
       </div>
 
       <div class="range-tip hidden" id="range-tip">
@@ -121,8 +175,10 @@ export class MapScreen {
     const style = this._satellite
       ? 'mapbox://styles/mapbox/satellite-streets-v12'
       : 'mapbox://styles/mapbox/outdoors-v12';
-    const btn = document.getElementById('layer-toggle');
-    if (btn) btn.textContent = this._satellite ? '\u{1F5FA}️ Map' : '\u{1F6F0}️ Satellite';
+    const icon  = document.getElementById('layer-icon');
+    const title = document.getElementById('layer-title');
+    if (icon)  icon.textContent  = this._satellite ? '\u{1F5FA}️' : '\u{1F6F0}️';
+    if (title) title.textContent = this._satellite ? 'Map View' : 'Satellite View';
     this.map.once('style.load', () => {
       this._addCircleLayers();
       this._refreshCircles();
@@ -134,16 +190,48 @@ export class MapScreen {
   _bindEvents() {
     this.el.addEventListener('click', e => {
       const btn = e.target.closest('button');
-      if (!btn) return;
-      if (btn.id === 'mark-shot-btn')  this._startMarkShot();
-      if (btn.id === 'cancel-mark')    this._cancelMark();
-      if (btn.id === 'camera-btn')     this.onCameraRequest?.();
-      if (btn.id === 'session-btn')    this.onSessionRequest?.();
-      if (btn.id === 'layer-toggle')   this._toggleLayer();
+      if (btn) {
+        if (btn.id === 'hamburger-btn')     { this._toggleMenu(); return; }
+        if (btn.id === 'layer-toggle')      { this._toggleLayer(); this._closeMenu(); return; }
+        if (btn.id === 'session-btn')       { this.onSessionRequest?.(); this._closeMenu(); return; }
+        if (btn.id === 'history-quick-btn') { this.onSessionRequest?.(); return; }
+        if (btn.id === 'mark-shot-btn' ||
+            btn.id === 'mark-shot-opt')     { this._startMarkShot(); return; }
+        if (btn.id === 'cancel-mark')       { this._cancelMark(); return; }
+        if (btn.id === 'camera-btn')        { this.onCameraRequest?.(); return; }
+        return;
+      }
+      // Non-button clicks
+      if (e.target.id === 'menu-overlay')           { this._closeMenu(); return; }
+      if (e.target.closest('#sheet-peek'))           { this._toggleActionSheet(); }
     });
+
     this.map.on('click', e => {
       if (this.markingMode) this._confirmLanding(e.lngLat);
     });
+  }
+
+  // ── Menu drawer ────────────────────────────────────────────────────────
+  _toggleMenu() {
+    const drawer  = document.getElementById('menu-drawer');
+    const overlay = document.getElementById('menu-overlay');
+    const isOpen  = drawer?.classList.contains('open');
+    drawer?.classList.toggle('open', !isOpen);
+    overlay?.classList.toggle('hidden', isOpen);
+  }
+
+  _closeMenu() {
+    document.getElementById('menu-drawer')?.classList.remove('open');
+    document.getElementById('menu-overlay')?.classList.add('hidden');
+  }
+
+  // ── Action sheet ───────────────────────────────────────────────────────
+  _toggleActionSheet() {
+    document.getElementById('action-sheet')?.classList.toggle('expanded');
+  }
+
+  _collapseActionSheet() {
+    document.getElementById('action-sheet')?.classList.remove('expanded');
   }
 
   // ── GPS ────────────────────────────────────────────────────────────────
@@ -161,7 +249,7 @@ export class MapScreen {
 
   _onCoords(c) {
     this.userCoords = c;
-    const t = document.getElementById('gps-text');
+    const t   = document.getElementById('gps-text');
     const dot = document.getElementById('gps-dot');
     if (t)   t.textContent = `±${Math.round(c.accuracy ?? 0)}m`;
     if (dot) dot.className = 'gps-dot active';
@@ -185,18 +273,17 @@ export class MapScreen {
   // ── Shot marking (Phase 1) ─────────────────────────────────────────────
   _startMarkShot() {
     if (!this.userCoords) { alert('Waiting for GPS…'); return; }
-    initAudio(); // ungate AudioContext on user gesture
+    initAudio();
 
     this._pendingFrom = { lat: this.userCoords.lat, lng: this.userCoords.lng };
 
-    // Drop temporary tee marker
     const el = this._makeShotEl(session._shotSeq, 'tee');
     this._pendingFromMarker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
       .setLngLat([this._pendingFrom.lng, this._pendingFrom.lat]).addTo(this.map);
 
     this.markingMode = true;
+    this._collapseActionSheet();
     document.getElementById('mark-banner').classList.remove('hidden');
-    document.getElementById('mark-shot-btn').classList.add('hidden');
   }
 
   _confirmLanding(lngLat) {
@@ -210,7 +297,6 @@ export class MapScreen {
     this._drawShot(shot);
 
     document.getElementById('mark-banner').classList.add('hidden');
-    document.getElementById('mark-shot-btn').classList.remove('hidden');
   }
 
   _cancelMark() {
@@ -219,7 +305,6 @@ export class MapScreen {
     this._pendingFrom = null;
     this.markingMode = false;
     document.getElementById('mark-banner').classList.add('hidden');
-    document.getElementById('mark-shot-btn').classList.remove('hidden');
   }
 
   _drawShot(shot) {
@@ -246,8 +331,7 @@ export class MapScreen {
 
     this.shotMarkers.set(shot.id, { fromM, landM, fromEl, landEl });
     this._refreshCircles();
-    const badge = document.getElementById('shot-count');
-    if (badge) badge.textContent = session.shots.length;
+    this._updateShotCount();
   }
 
   _makeShotEl(id, type) {
@@ -282,10 +366,11 @@ export class MapScreen {
     const tip    = document.getElementById('range-tip');
     if (anyInRange) {
       banner?.classList.remove('hidden');
-      camBtn?.classList.remove('hidden');
+      camBtn?.classList.add('in-range');
       tip?.classList.remove('hidden');
     } else {
       banner?.classList.add('hidden');
+      camBtn?.classList.remove('in-range');
       tip?.classList.add('hidden');
     }
     this._refreshCircles();
@@ -329,11 +414,14 @@ export class MapScreen {
   }
 
   // ── Session sync ───────────────────────────────────────────────────────
+  _updateShotCount() {
+    const count = session.shots.length;
+    this.el.querySelectorAll('.shot-count').forEach(el => el.textContent = count);
+  }
+
   _syncSession() {
-    const badge = document.getElementById('shot-count');
-    if (badge) badge.textContent = session.shots.length;
+    this._updateShotCount();
     this._refreshCircles();
-    // Reflect found/lost status on landing marker colours
     for (const [id, { landEl }] of this.shotMarkers) {
       const shot = session.shots.find(s => s.id === id);
       if (!shot) continue;
