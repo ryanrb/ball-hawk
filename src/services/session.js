@@ -33,6 +33,11 @@ class SessionService {
     return det;
   }
 
+  removeShot(id) {
+    const idx = this.shots.findIndex(s => s.id === id);
+    if (idx !== -1) { this.shots.splice(idx, 1); this._emit(); }
+  }
+
   updateShotStatus(shotId, status) {
     const shot = this.shots.find(s => s.id === shotId);
     if (shot) { shot.status = status; this._emit(); }
