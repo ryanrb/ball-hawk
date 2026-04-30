@@ -20,6 +20,7 @@ export class MapScreen {
     this._pendingFromMarker = null;
     this._alertedIds = new Set();      // shots we've already bung'd for
     this._satellite = false;
+    this._pendingRemoveId = null;
     this.onCameraRequest = null;
     this.onSessionRequest = null;
   }
@@ -68,6 +69,14 @@ export class MapScreen {
         </button>
       </div>
       <div class="menu-overlay hidden" id="menu-overlay"></div>
+
+      <div class="dismiss-banner hidden" id="dismiss-banner">
+        <span class="dismiss-text">Remove shot <span id="dismiss-shot-num"></span>?</span>
+        <div class="dismiss-btns">
+          <button class="dismiss-cancel-btn" id="cancel-remove-btn">Keep</button>
+          <button class="dismiss-confirm-btn" id="confirm-remove-btn">Remove</button>
+        </div>
+      </div>
 
       <div class="proximity-banner hidden" id="prox-banner">
         &#x1F3AF; You&rsquo;re in range &mdash; tap Scan to detect
@@ -186,9 +195,11 @@ export class MapScreen {
         if (btn.id === 'hamburger-btn') { this._toggleMenu(); return; }
         if (btn.id === 'layer-toggle')  { this._toggleLayer(); this._closeMenu(); return; }
         if (btn.id === 'session-btn')   { this.onSessionRequest?.(); this._closeMenu(); return; }
-        if (btn.id === 'mark-shot-opt') { this._startMarkShot(); return; }
-        if (btn.id === 'cancel-mark')   { this._cancelMark(); return; }
-        if (btn.id === 'camera-btn')    { this.onCameraRequest?.(); return; }
+        if (btn.id === 'mark-shot-opt')     { this._startMarkShot(); return; }
+        if (btn.id === 'cancel-mark')       { this._cancelMark(); return; }
+        if (btn.id === 'camera-btn')        { this.onCameraRequest?.(); return; }
+        if (btn.id === 'confirm-remove-btn') { this._confirmRemoveShot(); return; }
+        if (btn.id === 'cancel-remove-btn')  { this._cancelRemoveShot(); return; }
         return;
       }
       if (e.target.id === 'menu-overlay') this._closeMenu();
@@ -351,6 +362,9 @@ export class MapScreen {
       if (this.userCoords) this._checkProximity(this.userCoords);
     });
 
+    this._addLongPress(fromEl, shot.id);
+    this._addLongPress(landEl, shot.id);
+
     this.shotMarkers.set(shot.id, { fromM, landM, fromEl, landEl });
     this._refreshCircles();
     this._updateShotCount();
@@ -361,6 +375,62 @@ export class MapScreen {
     el.className = `shot-marker ${type === 'tee' ? 'tee-marker' : 'landing-marker'}`;
     el.innerHTML = `<div class="shot-number">${id}</div>`;
     return el;
+  }
+
+  // ── Long-press removal ────────────────────────────────────────────────
+  _addLongPress(el, shotId) {
+    let timer = null;
+
+    const startPress = () => {
+      el.classList.add('pressing');
+      timer = setTimeout(() => {
+        el.classList.remove('pressing');
+        timer = null;
+        this._showRemoveConfirm(shotId);
+      }, 650);
+    };
+
+    const cancelPress = () => {
+      if (!timer) return;
+      el.classList.remove('pressing');
+      clearTimeout(timer);
+      timer = null;
+    };
+
+    el.addEventListener('touchstart',  startPress,  { passive: true });
+    el.addEventListener('touchend',    cancelPress);
+    el.addEventListener('touchmove',   cancelPress);
+    el.addEventListener('mousedown',   startPress);
+    el.addEventListener('mouseup',     cancelPress);
+    el.addEventListener('mouseleave',  cancelPress);
+  }
+
+  _showRemoveConfirm(shotId) {
+    if (this.markingMode) return;
+    navigator.vibrate?.(50);
+    this._pendingRemoveId = shotId;
+    const numEl = document.getElementById('dismiss-shot-num');
+    if (numEl) numEl.textContent = `#${shotId}`;
+    document.getElementById('dismiss-banner')?.classList.remove('hidden');
+  }
+
+  _confirmRemoveShot() {
+    if (this._pendingRemoveId == null) return;
+    const { fromM, landM } = this.shotMarkers.get(this._pendingRemoveId) ?? {};
+    fromM?.remove();
+    landM?.remove();
+    this.shotMarkers.delete(this._pendingRemoveId);
+    this.inRange.delete(this._pendingRemoveId);
+    this._alertedIds.delete(this._pendingRemoveId);
+    session.removeShot(this._pendingRemoveId);
+    if (this.userCoords) this._checkProximity(this.userCoords);
+    this._updateShotCount();
+    this._cancelRemoveShot();
+  }
+
+  _cancelRemoveShot() {
+    this._pendingRemoveId = null;
+    document.getElementById('dismiss-banner')?.classList.add('hidden');
   }
 
   // ── Proximity monitoring ───────────────────────────────────────────────
