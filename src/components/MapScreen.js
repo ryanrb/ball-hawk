@@ -79,17 +79,9 @@ export class MapScreen {
       </div>
 
       <div class="action-sheet" id="action-sheet">
-        <div class="sheet-peek" id="sheet-peek">
+        <div class="sheet-peek">
           <div class="sheet-handle"></div>
           <div class="sheet-prompt">Where is your ball?</div>
-          <div class="sheet-quick-btns">
-            <button class="history-quick-btn" id="history-quick-btn">
-              <span class="shot-badge shot-count">0</span>&nbsp;History
-            </button>
-            <button class="mark-quick-btn" id="mark-shot-btn">
-              &#x1F4CD;&nbsp;Mark Shot
-            </button>
-          </div>
         </div>
         <div class="sheet-options">
           <button class="action-option" id="mark-shot-opt">
@@ -191,19 +183,15 @@ export class MapScreen {
     this.el.addEventListener('click', e => {
       const btn = e.target.closest('button');
       if (btn) {
-        if (btn.id === 'hamburger-btn')     { this._toggleMenu(); return; }
-        if (btn.id === 'layer-toggle')      { this._toggleLayer(); this._closeMenu(); return; }
-        if (btn.id === 'session-btn')       { this.onSessionRequest?.(); this._closeMenu(); return; }
-        if (btn.id === 'history-quick-btn') { this.onSessionRequest?.(); return; }
-        if (btn.id === 'mark-shot-btn' ||
-            btn.id === 'mark-shot-opt')     { this._startMarkShot(); return; }
-        if (btn.id === 'cancel-mark')       { this._cancelMark(); return; }
-        if (btn.id === 'camera-btn')        { this.onCameraRequest?.(); return; }
+        if (btn.id === 'hamburger-btn') { this._toggleMenu(); return; }
+        if (btn.id === 'layer-toggle')  { this._toggleLayer(); this._closeMenu(); return; }
+        if (btn.id === 'session-btn')   { this.onSessionRequest?.(); this._closeMenu(); return; }
+        if (btn.id === 'mark-shot-opt') { this._startMarkShot(); return; }
+        if (btn.id === 'cancel-mark')   { this._cancelMark(); return; }
+        if (btn.id === 'camera-btn')    { this.onCameraRequest?.(); return; }
         return;
       }
-      // Non-button clicks
-      if (e.target.id === 'menu-overlay')           { this._closeMenu(); return; }
-      if (e.target.closest('#sheet-peek'))           { this._toggleActionSheet(); }
+      if (e.target.id === 'menu-overlay') this._closeMenu();
     });
 
     this.map.on('click', e => {
@@ -226,12 +214,12 @@ export class MapScreen {
   }
 
   // ── Action sheet ───────────────────────────────────────────────────────
-  _toggleActionSheet() {
-    document.getElementById('action-sheet')?.classList.toggle('expanded');
+  _dismissSheet() {
+    document.getElementById('action-sheet')?.classList.add('dismissed');
   }
 
-  _collapseActionSheet() {
-    document.getElementById('action-sheet')?.classList.remove('expanded');
+  _restoreSheet() {
+    document.getElementById('action-sheet')?.classList.remove('dismissed');
   }
 
   // ── GPS ────────────────────────────────────────────────────────────────
@@ -282,7 +270,7 @@ export class MapScreen {
       .setLngLat([this._pendingFrom.lng, this._pendingFrom.lat]).addTo(this.map);
 
     this.markingMode = true;
-    this._collapseActionSheet();
+    this._dismissSheet();
     document.getElementById('mark-banner').classList.remove('hidden');
   }
 
@@ -297,6 +285,7 @@ export class MapScreen {
     this._drawShot(shot);
 
     document.getElementById('mark-banner').classList.add('hidden');
+    this._restoreSheet();
   }
 
   _cancelMark() {
@@ -305,6 +294,7 @@ export class MapScreen {
     this._pendingFrom = null;
     this.markingMode = false;
     document.getElementById('mark-banner').classList.add('hidden');
+    this._restoreSheet();
   }
 
   _drawShot(shot) {
@@ -362,15 +352,12 @@ export class MapScreen {
     }
 
     const banner = document.getElementById('prox-banner');
-    const camBtn = document.getElementById('camera-btn');
     const tip    = document.getElementById('range-tip');
     if (anyInRange) {
       banner?.classList.remove('hidden');
-      camBtn?.classList.add('in-range');
       tip?.classList.remove('hidden');
     } else {
       banner?.classList.add('hidden');
-      camBtn?.classList.remove('in-range');
       tip?.classList.add('hidden');
     }
     this._refreshCircles();
