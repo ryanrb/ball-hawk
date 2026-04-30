@@ -70,7 +70,6 @@ export class CameraScreen {
         </div>
 
         <div class="camera-controls">
-          <p class="range-hint">Best results within 25 yards</p>
           <div class="zoom-controls" id="zoom-controls">
             <button class="zoom-btn active" data-zoom="1">1&times;</button>
             <button class="zoom-btn" data-zoom="2">2&times;</button>
