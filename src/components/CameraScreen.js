@@ -17,7 +17,7 @@ export class CameraScreen {
     this._video = null;
     // Callbacks set by main.js
     this.onClose = null;
-    this.onFound = null;        // (shotId, confidence) → void
+    this.onFound = null;        // (shotId, confidence, coords?) → void; coords from GPS when available
     this.getActiveShot = null;  // () => shot | null
     this._reviewData = null;   // { shotId, confidence } stored during review
     this._orientationHandler = null;
@@ -312,12 +312,22 @@ export class CameraScreen {
     });
   }
 
-  _confirmFound() {
+  async _confirmFound() {
     if (!this._reviewData) return;
     const { shotId, confidence } = this._reviewData;
     this._reviewData = null;
     this._removeReviewOverlay();
-    this.onFound?.(shotId, confidence);
+    let coords = null;
+    try {
+      coords = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          p => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+          reject,
+          { enableHighAccuracy: true, timeout: 5000 }
+        );
+      });
+    } catch (_) {}
+    this.onFound?.(shotId, confidence, coords);
   }
 
   _dismissReview() {

@@ -1,10 +1,8 @@
-import 'mapbox-gl/dist/mapbox-gl.css';
 import './styles.css';
 import { MapScreen }    from './components/MapScreen.js';
 import { CameraScreen } from './components/CameraScreen.js';
 import { SweepScreen }  from './components/SweepScreen.js';
 import { SessionPanel } from './components/SessionPanel.js';
-import { session }      from './services/session.js';
 
 async function init() {
   const app = document.getElementById('app');
@@ -39,8 +37,8 @@ async function init() {
   mapScreen.onSessionRequest = () => sessionPanel.show();
 
   cameraScreen.onClose      = () => showMap();
-  cameraScreen.onFound      = (shotId, confidence) => {
-    if (shotId != null) session.updateShotStatus(shotId, 'found');
+  cameraScreen.onFound      = (shotId, _confidence, coords) => {
+    mapScreen.resolveSweepFound(shotId, coords);
     showMap();
   };
   cameraScreen.getActiveShot = () => mapScreen.getNearestActiveShot();
