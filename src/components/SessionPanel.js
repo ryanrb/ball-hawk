@@ -32,7 +32,7 @@ export class SessionPanel {
       if (btn.classList.contains('lost-btn'))  session.updateShotStatus(shotId, 'lost');
     });
 
-    session.onChange(() => { if (this.visible) this._refresh(); });
+    session.onChange(() => this._refresh());
   }
 
   show() {

@@ -382,6 +382,25 @@ export class MapScreen {
     if (this.userCoords) this._checkProximity(this.userCoords);
   }
 
+  /**
+   * Live Sweep "Found it": link to nearest active shot when possible; otherwise
+   * add a session shot using coords for both tee and landing (user skipped Mark Shot).
+   */
+  resolveSweepFound(shotId, coords) {
+    const pin = coords && typeof coords.lat === 'number' && typeof coords.lng === 'number'
+      ? { lat: coords.lat, lng: coords.lng }
+      : null;
+    if (shotId != null) {
+      session.updateShotStatus(shotId, 'found');
+      if (pin) this.updateShotLocationFromSweep(shotId, pin);
+      return;
+    }
+    if (!pin) return;
+    const shot = session.addShot({ ...pin }, { ...pin });
+    this._drawShot(shot);
+    session.updateShotStatus(shot.id, 'found');
+  }
+
   _makeShotEl(id, type) {
     const el = document.createElement('div');
     el.className = `shot-marker ${type === 'tee' ? 'tee-marker' : 'landing-marker'}`;

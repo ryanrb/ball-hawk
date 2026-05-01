@@ -47,10 +47,7 @@ async function init() {
 
   sweepScreen.onClose       = () => showMap();
   sweepScreen.onFound       = (shotId, coords) => {
-    if (shotId != null) {
-      session.updateShotStatus(shotId, 'found');
-      if (coords) mapScreen.updateShotLocationFromSweep(shotId, coords);
-    }
+    mapScreen.resolveSweepFound(shotId, coords);
     showMap();
   };
   sweepScreen.getActiveShot = () => mapScreen.getNearestActiveShot();

@@ -121,7 +121,6 @@ export class SweepScreen {
         <div class="sweep-review-stage hidden" id="sweep-review-stage">
           <canvas id="sweep-review-canvas"></canvas>
           <div class="sweep-review-bar">
-            <button type="button" class="sweep-keep-btn" id="sweep-back-live">Back to live</button>
             <button type="button" class="sweep-found-btn" id="sweep-found-btn">&#x2713;&nbsp;Found It!</button>
           </div>
         </div>
@@ -184,7 +183,6 @@ export class SweepScreen {
       if (btn.id === 'sweep-back')         { this.onClose?.(); return; }
       if (btn.id === 'sweep-perm-btn')      { this._initCamera(); return; }
       if (btn.id === 'sweep-found-btn')     { this._confirmFound(); return; }
-      if (btn.id === 'sweep-back-live')    { this._setMainView('live'); return; }
       if (btn.id === 'sweep-pip-hit')      { if (this._hasLastHit) this._setMainView('review'); return; }
       if (btn.id === 'sweep-pip-live')     { this._setMainView('live'); return; }
     });
