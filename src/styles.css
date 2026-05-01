@@ -311,8 +311,16 @@ html, body {
 .action-sheet.expanded  { transform: translateY(0); }
 .action-sheet.dismissed { transform: translateY(calc(100% + var(--safe-bottom))); }
 
+@media (orientation: landscape) {
+  .action-sheet {
+    left: 10%;
+    right: 10%;
+    border-radius: 20px 20px 0 0;
+  }
+}
+
 .sheet-peek {
-  min-height: 90px; /* keeps options section below the visible 72px fold */
+  min-height: calc(var(--sheet-peek) + var(--safe-bottom) + 20px); /* always clears the visible window */
   padding: 10px 20px 12px;
   cursor: pointer;
   user-select: none;
