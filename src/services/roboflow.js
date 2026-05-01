@@ -37,7 +37,15 @@ async function inferWithRefinement(cap, threshold) {
   let preds = await inferCanvas(cap);
   let passes = 1;
   let best = preds.find(p => p.confidence >= threshold) ?? null;
-  if (!best) return null;
+  if (!best) {
+    const topRaw = preds[0];
+    console.log('[BallHawk] No detection above threshold (%.0f%%). Top raw prediction: %s',
+      threshold * 100,
+      topRaw ? `${(topRaw.confidence * 100).toFixed(1)}%` : 'none');
+    return null;
+  }
+
+  console.log('[BallHawk] Pass 1 (raw): %.1f%% confidence — entering refinement loop', best.confidence * 100);
 
   while (best.confidence < 0.75 && passes < 4) {
     const cropW = Math.min(INFER_W, best.width  * 2);
@@ -64,9 +72,11 @@ async function inferWithRefinement(cap, threshold) {
       height: refBest.height * sy,
     };
     preds = [best];
+    console.log('[BallHawk] Pass %d (refined): %.1f%% confidence', passes, best.confidence * 100);
     if (best.confidence >= 0.85) break;
   }
 
+  console.log('[BallHawk] Final: %.1f%% after %d pass(es)', best.confidence * 100, passes);
   return { preds, passes, best };
 }
 
@@ -86,6 +96,8 @@ export async function runWithRefinement(sourceCanvas, threshold = 0.5) {
   // just upscale a blurry patch — skip straight to full-frame in that case.
   const highRes = sourceCanvas.width > INFER_W * 2 && sourceCanvas.height > INFER_H * 2;
 
+  console.log('[BallHawk] Source: %dx%d (%s)', sourceCanvas.width, sourceCanvas.height, highRes ? 'high-res → center-crop first' : 'low-res → full-frame only');
+
   if (highRes) {
     // Pass 1: center crop → effectively 3× zoom from the raw sensor frame
     const crop = centerCropRect(sourceCanvas);
@@ -94,6 +106,7 @@ export async function runWithRefinement(sourceCanvas, threshold = 0.5) {
       sourceCanvas, crop.x, crop.y, crop.w, crop.h, 0, 0, INFER_W, INFER_H
     );
     applyPipeline(cap1);
+    console.log('[BallHawk] → Center-crop pass (%dx%d region)', crop.w, crop.h);
     const r1 = await inferWithRefinement(cap1, threshold);
 
     if (r1) {
@@ -110,6 +123,7 @@ export async function runWithRefinement(sourceCanvas, threshold = 0.5) {
   }
 
   // Full-frame inference (only pass on low-res source; pass 2 fallback on high-res)
+  console.log('[BallHawk] → Full-frame pass');
   const cap = makeCanvas(INFER_W, INFER_H);
   cap.getContext('2d').drawImage(sourceCanvas, 0, 0, INFER_W, INFER_H);
   applyPipeline(cap);
