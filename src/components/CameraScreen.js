@@ -23,6 +23,16 @@ function predRadiusFullPixels(pred, capW, capH, cropRect, fw, fh) {
   return rNorm * Math.min(rw, rh);
 }
 
+/** Map a point in full video-frame pixels to overlay canvas (matches CSS object-fit: cover on #cam-video). */
+function videoPxToCanvasCover(vx, vy, vw, vh, cw, ch) {
+  const scale = Math.max(cw / vw, ch / vh);
+  const dw = vw * scale;
+  const dh = vh * scale;
+  const ox = (cw - dw) / 2;
+  const oy = (ch - dh) / 2;
+  return { cx: ox + vx * scale, cy: oy + vy * scale, scale };
+}
+
 export class CameraScreen {
   constructor(el) {
     this.el = el;
@@ -550,14 +560,19 @@ export class CameraScreen {
 
     const vw = this._video.videoWidth  || 640;
     const vh = this._video.videoHeight || 480;
-    const sx = canvas.width  / vw;
-    const sy = canvas.height / vh;
+    if (!vw || !vh) return;
+
+    const cw = canvas.width;
+    const ch = canvas.height;
+    const { capW, capH } = this._captureDims;
+    const cropRect = this._cropRect;
 
     for (const p of this._lastPreds) {
       if (p.confidence < this.threshold) continue;
-      const cx = p.x * sx;
-      const cy = p.y * sy;
-      const r  = Math.max((p.width * sx + p.height * sy) / 4 * 1.35, 18);
+      const { sx: vx, sy: vy } = predCenterFullPixels(p, capW, capH, cropRect, vw, vh);
+      const { cx, cy, scale } = videoPxToCanvasCover(vx, vy, vw, vh, cw, ch);
+      const rVideo = predRadiusFullPixels(p, capW, capH, cropRect, vw, vh);
+      const r = Math.max(rVideo * scale, 10);
 
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);

@@ -650,11 +650,11 @@ html, body {
   pointer-events: none;
 }
 
-/* Camera PiP: header sits above viewport; anchor left so zoom rail on the right stays clear */
+/* Camera PiP: header sits above viewport; upper-right (zoom lives along bottom bar) */
 .cam-pip {
   top: 48px;
-  left: 12px;
-  right: auto;
+  right: 12px;
+  left: auto;
 }
 
 #cam-video {
@@ -705,30 +705,35 @@ html, body {
   z-index: 15;
 }
 
-/* ── Camera controls (right-side overlay) ────────────────────────────── */
+/* ── Camera controls (bottom bar: zoom + shutter) ───────────────────── */
 .camera-controls {
   position: absolute;
-  right: 0; top: 0; bottom: 0;
-  padding: 20px 16px calc(var(--safe-bottom) + 20px) 28px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: auto;
+  padding: 12px 16px calc(var(--safe-bottom) + 14px);
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  justify-content: flex-end;
-  gap: 20px;
-  background: linear-gradient(to left, rgba(0,0,0,0.55) 10%, transparent);
+  justify-content: center;
+  gap: 28px;
+  background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.25) 55%, transparent 100%);
   pointer-events: none;
   z-index: 10;
 }
 
 .zoom-controls {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
   background: rgba(0,0,0,0.45);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border-radius: 20px;
-  padding: 3px;
+  padding: 4px 6px;
   pointer-events: auto;
 }
 .zoom-btn {
