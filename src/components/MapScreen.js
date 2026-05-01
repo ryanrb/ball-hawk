@@ -21,8 +21,9 @@ export class MapScreen {
     this._alertedIds = new Set();      // shots we've already bung'd for
     this._satellite = false;
     this._pendingRemoveId = null;
-    this.onCameraRequest = null;
+    this.onCameraRequest  = null;
     this.onSessionRequest = null;
+    this.onSweepRequest   = null;
   }
 
   async init() {
@@ -118,13 +119,13 @@ export class MapScreen {
             </div>
             <span class="action-opt-chevron">&#x203A;</span>
           </button>
-          <button class="action-option sweep-option" disabled>
+          <button class="action-option sweep-option" id="sweep-btn">
             <div class="action-opt-icon sweep-opt-icon">&#x1F50D;</div>
             <div class="action-opt-text">
               <div class="action-opt-title">Perform a Live Sweep</div>
               <div class="action-opt-desc">Scan close-range grass</div>
             </div>
-            <span class="coming-soon-badge">Soon</span>
+            <span class="action-opt-chevron">&#x203A;</span>
           </button>
         </div>
       </div>
@@ -207,6 +208,7 @@ export class MapScreen {
         if (btn.id === 'mark-shot-opt')     { this._startMarkShot(); return; }
         if (btn.id === 'cancel-mark')       { this._cancelMark(); return; }
         if (btn.id === 'camera-btn')        { this.onCameraRequest?.(); return; }
+        if (btn.id === 'sweep-btn')         { this.onSweepRequest?.(); return; }
         if (btn.id === 'confirm-remove-btn') { this._confirmRemoveShot(); return; }
         if (btn.id === 'cancel-remove-btn')  { this._cancelRemoveShot(); return; }
         return;
@@ -365,6 +367,19 @@ export class MapScreen {
     this.shotMarkers.set(shot.id, { fromM, landM, fromEl, landEl });
     this._refreshCircles();
     this._updateShotCount();
+  }
+
+  // Called by main.js after a Live Sweep confirmation to move the landing pin
+  // to the user's current GPS position.
+  updateShotLocationFromSweep(shotId, coords) {
+    if (!coords) return;
+    const markers = this.shotMarkers.get(shotId);
+    if (markers?.landM) {
+      markers.landM.setLngLat([coords.lng, coords.lat]);
+    }
+    session.updateShotLanding(shotId, coords);
+    this._refreshCircles();
+    if (this.userCoords) this._checkProximity(this.userCoords);
   }
 
   _makeShotEl(id, type) {

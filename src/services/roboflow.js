@@ -81,6 +81,18 @@ async function inferWithRefinement(cap, threshold) {
 }
 
 /**
+ * Single-pass fast inference: resize to 640×480, apply preprocessing, one
+ * Roboflow call with no refinement loop. Used by Live Sweep for low-latency
+ * continuous scanning. Returns the sorted predictions array.
+ */
+export async function inferFast(sourceCanvas) {
+  const cap = makeCanvas(INFER_W, INFER_H);
+  cap.getContext('2d').drawImage(sourceCanvas, 0, 0, INFER_W, INFER_H);
+  applyPipeline(cap);
+  return inferCanvas(cap);
+}
+
+/**
  * Two-pass inference: center-crop first (3× effective zoom using full sensor
  * resolution), then full-frame fallback if nothing found.
  *
