@@ -1,7 +1,6 @@
 import { runWithRefinement } from '../services/roboflow.js';
 import { beep, initAudio } from '../utils/audio.js';
 
-const BOX_FONT = 'bold 13px -apple-system, sans-serif';
 
 export class CameraScreen {
   constructor(el) {
@@ -9,7 +8,7 @@ export class CameraScreen {
     this.stream = null;
     this.track = null;
     this.imageCapture = null;
-    this.threshold = 0.55;
+    this.threshold = 0.5;
     this.currentZoom = 1;
     this.processing = false;
     this._overlayCtx = null;
@@ -54,11 +53,6 @@ export class CameraScreen {
       <div class="camera-header">
         <button class="back-btn" id="cam-back">&#x2190; Map</button>
         <div class="phase-label">Phase 2 &middot; Smart Camera</div>
-        <div class="conf-row">
-          <label>Min: <span class="conf-val" id="conf-val">55%</span></label>
-          <input class="conf-slider" id="conf-slider" type="range"
-                 min="0" max="1" step="0.01" value="0.55" />
-        </div>
       </div>
 
       <div class="camera-viewport">
@@ -119,13 +113,6 @@ export class CameraScreen {
       }
     });
 
-    this.el.addEventListener('input', e => {
-      if (e.target.id === 'conf-slider') {
-        this.threshold = parseFloat(e.target.value);
-        const v = document.getElementById('conf-val');
-        if (v) v.textContent = `${Math.round(this.threshold * 100)}%`;
-      }
-    });
   }
 
   // ── Camera init ───────────────────────────────────────────────────────
@@ -303,27 +290,23 @@ export class CameraScreen {
       const cy = drawY + (pred.y / capH) * H;
       const r  = ((pred.width / capW) + (pred.height / capH)) / 4 * Math.min(W, H);
 
-      const t     = Math.min(1, (confidence - this.threshold) / (1 - this.threshold));
-      const hue   = Math.round(240 * (1 - t));
-      const color = `hsl(${hue},100%,55%)`;
-
+      const circleR = Math.max(r * 1.35, 22);
       ctx.beginPath();
-      ctx.arc(cx, cy, Math.max(r, 12), 0, Math.PI * 2);
-      ctx.strokeStyle = color;
-      ctx.lineWidth   = 3;
-      ctx.shadowColor = color;
-      ctx.shadowBlur  = 14;
+      ctx.arc(cx, cy, circleR, 0, Math.PI * 2);
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth   = 5;
+      ctx.shadowColor = 'rgba(0,0,0,0.6)';
+      ctx.shadowBlur  = 6;
       ctx.stroke();
       ctx.shadowBlur  = 0;
 
-      const tier  = confidence >= 0.70 ? 'Ball found' : 'Possible ball';
-      const label = `${tier} · ${Math.round(confidence * 100)}%`;
+      const label = 'Ball found';
       ctx.font = 'bold 14px -apple-system, sans-serif';
       const tw = ctx.measureText(label).width;
       ctx.fillStyle = 'rgba(0,0,0,0.75)';
-      ctx.fillRect(cx - tw / 2 - 8, cy + r + 6, tw + 16, 22);
-      ctx.fillStyle = color;
-      ctx.fillText(label, cx - tw / 2, cy + r + 22);
+      ctx.fillRect(cx - tw / 2 - 8, cy + circleR + 6, tw + 16, 22);
+      ctx.fillStyle = 'white';
+      ctx.fillText(label, cx - tw / 2, cy + circleR + 22);
 
       beep();
     });
@@ -394,29 +377,18 @@ export class CameraScreen {
 
     for (const p of this._lastPreds) {
       if (p.confidence < this.threshold) continue;
-      const t     = Math.min(1, (p.confidence - this.threshold) / (1 - this.threshold));
-      const hue   = Math.round(240 * (1 - t)); // blue → red as confidence rises
-      const color = `hsl(${hue},100%,55%)`;
-      const cx    = p.x * sx;
-      const cy    = p.y * sy;
-      const r     = (p.width * sx + p.height * sy) / 4;
+      const cx = p.x * sx;
+      const cy = p.y * sy;
+      const r  = Math.max((p.width * sx + p.height * sy) / 4 * 1.35, 18);
 
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.strokeStyle = color;
-      ctx.lineWidth   = 2.5;
-      ctx.shadowColor = color;
-      ctx.shadowBlur  = 8;
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth   = 4;
+      ctx.shadowColor = 'rgba(0,0,0,0.6)';
+      ctx.shadowBlur  = 6;
       ctx.stroke();
       ctx.shadowBlur  = 0;
-
-      const label = `${Math.round(p.confidence * 100)}%`;
-      ctx.font = BOX_FONT;
-      const tw = ctx.measureText(label).width;
-      ctx.fillStyle = 'rgba(0,0,0,0.65)';
-      ctx.fillRect(cx - tw / 2 - 5, cy + r + 4, tw + 10, 20);
-      ctx.fillStyle = color;
-      ctx.fillText(label, cx - tw / 2, cy + r + 18);
     }
   }
 }
