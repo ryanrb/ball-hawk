@@ -650,9 +650,11 @@ html, body {
   pointer-events: none;
 }
 
-/* Camera PiP: header sits above viewport — use inset from viewport top only */
+/* Camera PiP: header sits above viewport; anchor left so zoom rail on the right stays clear */
 .cam-pip {
   top: 48px;
+  left: 12px;
+  right: auto;
 }
 
 #cam-video {
