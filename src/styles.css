@@ -889,27 +889,38 @@ html, body {
   position: absolute;
   inset: 0;
   z-index: 4;
-  display: flex;
-  flex-direction: column;
   background: #000;
-  min-height: 0;
 }
 
 #sweep-review-canvas {
-  flex: 1;
+  position: absolute;
+  inset: 0;
   width: 100%;
-  min-height: 0;
+  height: 100%;
   display: block;
-  object-fit: fill;
 }
 
 .sweep-review-bar {
-  flex-shrink: 0;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   gap: 10px;
-  padding: 12px 14px calc(12px + var(--safe-bottom));
-  background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%);
-  z-index: 6;
+  padding: 20px 14px calc(20px + var(--safe-bottom));
+  z-index: 8;
+  pointer-events: none;
+  background: linear-gradient(
+    to top,
+    rgba(0,0,0,0.82) 0%,
+    rgba(0,0,0,0.4) 40%,
+    transparent 100%
+  );
+}
+
+.sweep-review-bar .sweep-keep-btn,
+.sweep-review-bar .sweep-found-btn {
+  pointer-events: auto;
 }
 
 .sweep-pip {

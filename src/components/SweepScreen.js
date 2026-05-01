@@ -23,6 +23,21 @@ function _predRadiusOnCanvas(pred, cw, ch) {
   );
 }
 
+/** Infer-space box → source pixel center (same linear map as inferFast stretch). */
+function _predCenterInSource(pred, sw, sh) {
+  return {
+    sx: (pred.x / INFER_W) * sw,
+    sy: (pred.y / INFER_H) * sh,
+  };
+}
+
+function _predRadiusInSource(pred, sw, sh) {
+  return Math.max(
+    ((pred.width / INFER_W) * sw + (pred.height / INFER_H) * sh) / 4 * 1.35,
+    Math.min(sw, sh) * 0.02
+  );
+}
+
 export class SweepScreen {
   constructor(el) {
     this.el = el;
@@ -328,12 +343,44 @@ export class SweepScreen {
     }
   }
 
-  _drawFrozenWithCircle(ctx, destW, destH, pred) {
-    if (!this._lastHitCanvas || !pred) return;
+  /**
+   * @param {object} pred
+   * @param {boolean} cover  If true, uniform scale like CSS object-fit: cover (no squash).
+   */
+  _drawFrozenWithCircle(ctx, destW, destH, pred, cover = false) {
+    const img = this._lastHitCanvas;
+    if (!img || !pred) return;
+    const W = img.width;
+    const H = img.height;
+    if (!W || !H) return;
+
     ctx.save();
-    ctx.drawImage(this._lastHitCanvas, 0, 0, destW, destH);
-    const { cx, cy } = _predCenterOnCanvas(pred, destW, destH);
-    const r = _predRadiusOnCanvas(pred, destW, destH);
+
+    if (!cover) {
+      ctx.drawImage(img, 0, 0, destW, destH);
+      const { cx, cy } = _predCenterOnCanvas(pred, destW, destH);
+      const r = _predRadiusOnCanvas(pred, destW, destH);
+      this._strokeHitCircle(ctx, cx, cy, r, destW, destH);
+      ctx.restore();
+      return;
+    }
+
+    const scale = Math.max(destW / W, destH / H);
+    const dw = W * scale;
+    const dh = H * scale;
+    const dx = (destW - dw) / 2;
+    const dy = (destH - dh) / 2;
+    ctx.drawImage(img, 0, 0, W, H, dx, dy, dw, dh);
+
+    const { sx, sy } = _predCenterInSource(pred, W, H);
+    const cx = dx + (sx / W) * dw;
+    const cy = dy + (sy / H) * dh;
+    const r  = _predRadiusInSource(pred, W, H) * scale;
+    this._strokeHitCircle(ctx, cx, cy, r, destW, destH);
+    ctx.restore();
+  }
+
+  _strokeHitCircle(ctx, cx, cy, r, destW, destH) {
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(255,255,255,0.92)';
@@ -342,7 +389,6 @@ export class SweepScreen {
     ctx.shadowBlur  = 6;
     ctx.stroke();
     ctx.shadowBlur  = 0;
-    ctx.restore();
   }
 
   _drawHitPip() {
@@ -351,7 +397,7 @@ export class SweepScreen {
     const h = PIP_CANVAS_H;
     const ctx = this._pipHitCtx;
     ctx.clearRect(0, 0, w, h);
-    this._drawFrozenWithCircle(ctx, w, h, this._lastPred);
+    this._drawFrozenWithCircle(ctx, w, h, this._lastPred, true);
   }
 
   _drawLivePip() {
@@ -384,7 +430,7 @@ export class SweepScreen {
     const rw = this._reviewCanvas.width;
     const rh = this._reviewCanvas.height;
     ctx.clearRect(0, 0, rw, rh);
-    this._drawFrozenWithCircle(ctx, rw, rh, this._lastPred);
+    this._drawFrozenWithCircle(ctx, rw, rh, this._lastPred, true);
   }
 
   _setMainView(mode) {
