@@ -27,9 +27,18 @@ export class MapScreen {
 
   async init() {
     this._render();
-    await this._initMap();
+    // Obtain first GPS fix before map init so we can center on the user immediately
+    let initialCoords = null;
+    try {
+      initialCoords = await gps.start();
+    } catch {
+      const t = document.getElementById('gps-text');
+      if (t) t.textContent = 'GPS denied';
+    }
+    await this._initMap(initialCoords);
     this._bindEvents();
-    this._startGPS();
+    if (initialCoords) this._onCoords(initialCoords);
+    gps.onUpdate(c => this._onCoords(c));
     session.onChange(() => this._syncSession());
   }
 
@@ -127,13 +136,13 @@ export class MapScreen {
   }
 
   // ── Mapbox init ────────────────────────────────────────────────────────
-  _initMap() {
+  _initMap(coords) {
     return new Promise(resolve => {
       this.map = new mapboxgl.Map({
         container: 'bh-map',
         style: 'mapbox://styles/mapbox/outdoors-v12',
-        zoom: 16,
-        center: [-98.583, 39.833], // US center fallback
+        zoom: coords ? 18 : 16,
+        center: coords ? [coords.lng, coords.lat] : [-98.583, 39.833],
         attributionControl: false,
       });
       this.map.addControl(
@@ -266,18 +275,6 @@ export class MapScreen {
   }
 
   // ── GPS ────────────────────────────────────────────────────────────────
-  async _startGPS() {
-    try {
-      const coords = await gps.start();
-      this._onCoords(coords);
-      this.map.flyTo({ center: [coords.lng, coords.lat], zoom: 18 });
-    } catch {
-      const t = document.getElementById('gps-text');
-      if (t) t.textContent = 'GPS denied';
-    }
-    gps.onUpdate(c => this._onCoords(c));
-  }
-
   _onCoords(c) {
     this.userCoords = c;
     const t   = document.getElementById('gps-text');
